@@ -269,4 +269,6 @@ io.on('connection', (socket) => {
     });
 });
 
-http.listen(3000, () => console.log('서버 구동 완료!'));
+// Render가 지정한 포트(process.env.PORT)를 우선 사용하고, 없으면 3000번을 써라!
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => console.log(`서버 구동 완료! 포트: ${PORT}`));
