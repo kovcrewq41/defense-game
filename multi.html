@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>협동 디펜스 멀티</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; color: white; font-family: sans-serif; }
+        #lobby { text-align: center; }
+        input, button { padding: 15px; font-size: 18px; margin: 10px; border-radius: 8px; border: none; }
+        button { background-color: #4CAF50; color: white; cursor: pointer; font-weight: bold; }
+        
+        #gameContainer { position: relative; display: none; background-color: #1a1a1a; aspect-ratio: 720 / 1280; height: 100vh; max-width: 100vw; overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+        
+        /* 하단 뽑기 패널 */
+        #uiPanel { position: absolute; bottom: 0; width: 100%; height: 10%; background: rgba(0,0,0,0.85); border-top: 3px solid #555; display: flex; justify-content: space-around; align-items: center; box-sizing: border-box; padding: 0 10px; z-index: 10; }
+        .ui-btn { padding: 1vh 2vh; font-size: 2vh; border-radius: 8px; border: 2px solid white; cursor: pointer; font-weight: bold; }
+        #btnGacha { background: #ff6b6b; color: white; }
+
+        /* 가챠 결과 팝업 */
+        #popupOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 50; }
+        #popupBox { background: #2d2d2d; padding: 4vh; border-radius: 2vh; border: 4px solid gold; text-align: center; box-shadow: 0 0 30px gold; }
+        #popupImg { width: 15vh; height: 15vh; margin: 2vh auto; background-size: 200% 200%; background-position: 0 0; background-repeat: no-repeat; }
+
+        /* 게임 오버 결과창 */
+        #gameOverOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; text-align: center; }
+        .go-title { color: #ff5252; font-size: 6vh; font-weight: bold; margin-bottom: 4vh; text-shadow: 0 0 20px #ff5252; }
+        .go-stat { font-size: 3vh; margin-bottom: 2vh; }
+        #btnGoLobby { margin-top: 5vh; padding: 2vh 5vh; font-size: 2.5vh; background: #c62828; color: white; border: none; border-radius: 1.5vh; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="lobby">
+        <h1>⚔️ 2인 협동 디펜스 ⚔️</h1>
+        <input type="text" id="roomInput" placeholder="방 코드 입력">
+        <br><button id="joinBtn">방 입장하기</button><p id="statusMsg" style="color: yellow;"></p>
+    </div>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="720" height="1280"></canvas>
+        
+        <div id="uiPanel">
+            <div style="font-size: 2.5vh; color: gold; font-weight: bold;">💰 <span id="myGold">100</span></div>
+            <button id="btnGacha" class="ui-btn">🎲 기본 뽑기 (100G)</button>
+            <div style="font-size: 2vh; color: #aaa;">아이템은 보스를 잡으면 드랍됩니다!</div>
+        </div>
+
+        <div id="popupOverlay">
+            <div id="popupBox">
+                <h2 style="margin-top: 0;">🎉 유닛 획득!</h2>
+                <div id="popupImg"></div>
+                <h3 id="popupName" style="color: gold; margin-bottom: 2vh;">이름</h3>
+                <button id="popupClose" style="font-size: 2vh; padding: 1vh 3vh; cursor: pointer;">배치하기</button>
+            </div>
+        </div>
+
+        <div id="gameOverOverlay">
+            <div class="go-title">GAME OVER</div>
+            <div class="go-stat">처치한 몬스터: <span id="goKills" style="color: gold;">0</span>마리</div>
+            <div class="go-stat">진행한 웨이브: <span id="goWave" style="color: #4fc3f7;">1</span></div>
+            <div class="go-stat">획득한 골드: <span id="goGold" style="color: #ffeb3b;">0</span>G</div>
+            <button id="btnGoLobby">로비로 돌아가기</button>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="data.js"></script>
+    <script src="multi_game.js"></script>
+</body>
+</html>
