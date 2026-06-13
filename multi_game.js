@@ -8,7 +8,6 @@ const dpr = window.devicePixelRatio || 1;
 canvas.width = logicalWidth * dpr;
 canvas.height = logicalHeight * dpr;
 
-// ★ [핵심 완벽 해결] 화면 찌그러짐, 잘림 현상 방지 및 HTML 잔재 숨김 처리
 document.body.style.margin = "0";
 document.body.style.overflow = "hidden";
 document.body.style.backgroundColor = "#000";
@@ -29,7 +28,7 @@ function resizeCanvas() {
     canvas.style.left = "50%";
     canvas.style.top = "50%";
     canvas.style.transform = "translate(-50%, -50%)";
-    canvas.style.zIndex = "100"; // 캔버스를 맨 위로 올려 예전 HTML 버튼을 다 덮어버림
+    canvas.style.zIndex = "100"; 
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -37,6 +36,8 @@ resizeCanvas();
 ctx.scale(dpr, dpr);
 
 const centerX = logicalWidth / 2;
+const centerY = 550; // ★ 이 좌표가 없어서 멈췄던 겁니다! 부활 완료!
+
 const socket = io("https://defense-game-ilbv.onrender.com");
 
 let mySide = ""; 
@@ -60,7 +61,6 @@ let origGridX = 0; let origGridY = 0;
 let draggingItem = null; 
 
 const TILE_SIZE = 80;
-// ★ 좌표 교정 (40 삐져나감 픽스)
 const START_X = 0; 
 const START_Y = 270; 
 
@@ -110,7 +110,6 @@ const roomInput = document.getElementById('roomInput');
 const joinBtn = document.getElementById('joinBtn');
 const statusMsg = document.getElementById('statusMsg');
 
-// ★ 로비에 '싱글플레이로 돌아가기' 버튼 동적 생성
 const backBtn = document.createElement('button');
 backBtn.innerText = "🏃 메인화면(싱글)으로 돌아가기";
 backBtn.style.cssText = "display:block; width:100%; padding:15px; margin-top:20px; font-size:18px; font-weight:bold; background-color:#c62828; color:white; border:none; border-radius:10px; cursor:pointer;";
