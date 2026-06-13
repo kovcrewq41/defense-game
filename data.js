@@ -29,13 +29,13 @@ const UNIT_DB = {
     "ARCHER_1": { name: "초보 궁수", trait: "ARCHER", color: "#81c784", cost: 0, upgradeCost: 150, sellPrice: 50, next: "ARCHER_2", damage: 8, range: 200, cooldown: 30, imgSrc: "common_archer_fox.png" },
     "ARCHER_2": { name: "숙련 궁수", trait: "ARCHER", color: "#4caf50", cost: 0, upgradeCost: 400, sellPrice: 120, next: ["ARCHER_3A", "ARCHER_3B"], damage: 20, range: 220, cooldown: 25, imgSrc: "common_archer_fox.png" },
     "ARCHER_3A": { name: "저격수(사거리)", trait: "ARCHER", color: "#1b5e20", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 100, range: 450, cooldown: 40, imgSrc: "common_archer_fox.png" },
-    "ARCHER_3B": { name: "속사수(연사)", trait: "ARCHER", color: "#b2ff59", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 25, range: 220, cooldown: 8, imgSrc: "common_archer_fox.png" },
+    "ARCHER_3B": { name: "속사수(연사)", trait: "ARCHER", color: "#b2ff59", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 35, range: 220, cooldown: 10, imgSrc: "common_archer_fox.png" }, // ★ 최소 공속 제한 10에 맞춰 데미지 버그 보정
 
     // --- 3. 마법사 트리 ---
     "MAGE_1": { name: "견습 법사", trait: "MAGE", color: "#4fc3f7", cost: 0, upgradeCost: 200, sellPrice: 50, next: "MAGE_2", damage: 30, range: 150, cooldown: 90, effect: "slow", imgSrc: "common_mage_rabbit.png" },
     "MAGE_2": { name: "숙련 법사", trait: "MAGE", color: "#039be5", cost: 0, upgradeCost: 450, sellPrice: 120, next: ["MAGE_3A", "MAGE_3B"], damage: 80, range: 160, cooldown: 80, effect: "slow", imgSrc: "common_mage_rabbit.png" },
     "MAGE_3A": { name: "빙결사(홀딩)", trait: "MAGE", color: "#01579b", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 120, range: 180, cooldown: 70, effect: "deep_slow", imgSrc: "common_mage_rabbit.png" },
-    "MAGE_3B": { name: "화염술사(폭딜)", trait: "MAGE", color: "#ff5722", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 350, range: 170, cooldown: 75, effect: null, imgSrc: "common_mage_rabbit.png" },
+    "MAGE_3B": { name: "화염술사(폭딜)", trait: "MAGE", color: "#ff5722", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 350, range: 170, cooldown: 90, effect: null, imgSrc: "common_mage_rabbit.png" }, // ★ 묵직한 한방 컨셉을 위해 쿨다운 90으로 하향 밸런싱
 
     // --- 4. 방패병 트리 ---
     "SHIELD_1": { name: "초보 방패", trait: "SHIELD", color: "#b0bec5", cost: 0, upgradeCost: 150, sellPrice: 50, next: "SHIELD_2", damage: 5, range: 110, cooldown: 70, effect: "stun", imgSrc: "common_shield_mole.png" },
@@ -46,7 +46,7 @@ const UNIT_DB = {
     // --- 5. 암살자 트리 ---
     "ASSASSIN_1": { name: "초보 도적", trait: "ASSASSIN", color: "#ce93d8", cost: 0, upgradeCost: 200, sellPrice: 50, next: "ASSASSIN_2", damage: 25, range: 120, cooldown: 45, imgSrc: "common_assassin_cat.png" },
     "ASSASSIN_2": { name: "닌자", trait: "ASSASSIN", color: "#ab47bc", cost: 0, upgradeCost: 400, sellPrice: 120, next: ["ASSASSIN_3A", "ASSASSIN_3B"], damage: 60, range: 130, cooldown: 35, imgSrc: "common_assassin_cat.png" },
-    "ASSASSIN_3A": { name: "그림자(크리)", trait: "ASSASSIN", color: "#6a1b9a", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 120, range: 140, cooldown: 30, imgSrc: "common_assassin_cat.png" },
+    "ASSASSIN_3A": { name: "그림자(크리)", trait: "ASSASSIN", color: "#6a1b9a", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 90, range: 140, cooldown: 30, imgSrc: "common_assassin_cat.png" }, // ★ 과도한 DPS 하향 안정화 (120 -> 90)
     "ASSASSIN_3B": { name: "맹독(초연사)", trait: "ASSASSIN", color: "#00c853", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 30, range: 130, cooldown: 12, imgSrc: "common_assassin_cat.png" },
 
     // --- 6. 포병 트리 ---
@@ -60,7 +60,7 @@ const UNIT_DB = {
     "PRIEST_2": { name: "힐러", trait: "PRIEST", color: "#ffd54f", cost: 0, upgradeCost: 350, sellPrice: 120, next: ["PRIEST_3A", "PRIEST_3B"], damage: 2, range: 500, cooldown: 110, effect: "heal", imgSrc: "common_priest_dog.png" },
     "PRIEST_3A": { name: "구원자(폭풍힐)", trait: "PRIEST", color: "#f57f17", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 10, range: 500, cooldown: 100, effect: "heal", imgSrc: "common_priest_dog.png" },
     "PRIEST_3B": { name: "신관(빠른힐)", trait: "PRIEST", color: "#ffeb3b", cost: 0, upgradeCost: null, sellPrice: 300, next: null, damage: 3, range: 500, cooldown: 40, effect: "heal", imgSrc: "common_priest_dog.png" }
-};// data.js 파일의 맨 밑줄에 추가하세요!
+};
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { PlayerProfile, RELIC_DB, UNIT_DB };
