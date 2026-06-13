@@ -6,13 +6,18 @@ const logicalWidth = 720;
 const logicalHeight = 1280;
 const dpr = window.devicePixelRatio || 1;
 
+
+
 canvas.width = logicalWidth * dpr;
 canvas.height = logicalHeight * dpr;
-canvas.style.width = `${logicalWidth}px`;
-canvas.style.height = `${logicalHeight}px`;
+// ★ 3. [핵심 해결] 스마트폰 화면에 맞춰 비율 자동 축소! (확대/잘림 방지)
+canvas.style.width = "100%";       // 기기 가로폭에 100% 맞춤
+canvas.style.maxWidth = "720px";   // PC에서는 너무 커지지 않게 제한
+canvas.style.height = "auto";      // 세로 길이는 가로 비율에 맞춰 자동으로 예쁘게 줄어듦!
 
 ctx.scale(dpr, dpr);
 const centerX = logicalWidth / 2;
+const centerY = 550; // (멀티플레이 파일에는 이 줄이 없을 수 있으니 참고만 하세요)
 
 const socket = io("https://defense-game-ilbv.onrender.com");
 let mySide = ""; 
