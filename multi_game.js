@@ -146,4 +146,7 @@ function drawGameScreen() {
 
     ctx.fillStyle = "#222"; ctx.fillRect(0, 1000, logicalWidth, 280); ctx.fillStyle = "#aaa"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("📦 내 아이템 보관함", centerX, 1025);
     for (let i = 0; i < 5; i++) { let ix = 135 + i * 90; let iy = 1040; ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); if (myInventory[i] && (!draggingItem || draggingItem.index !== i)) { let item = ITEM_DB[myInventory[i]]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); } }
-    if (draggingItem) { let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx
+    if (draggingItem) { let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); }
+
+    drawFixedUnitPanel(); gameButtons.forEach(btn => btn.draw()); requestAnimationFrame(drawGameScreen);
+}
