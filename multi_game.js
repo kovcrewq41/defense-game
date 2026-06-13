@@ -1,7 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// ★ [해상도 깨짐 보정 로직] 멀티에서도 칼같은 선명함 보장!
+// ★ [해상도 보정]
 const logicalWidth = 720; 
 const logicalHeight = 1280;
 const dpr = window.devicePixelRatio || 1;
@@ -35,7 +35,6 @@ let selectedUnit = null;
 let origGridX = 0; let origGridY = 0;
 let draggingItem = null; 
 
-// ★ 멀티 전용 그리드 시스템 (좌측/우측 분리형 7x4 바둑판)
 const TILE_SIZE = 80;
 const START_X = 40; 
 const START_Y = 270; 
@@ -53,6 +52,23 @@ function getSprite(src) {
     if (!IMAGE_CACHE[src]) { const img = new Image(); img.src = src; IMAGE_CACHE[src] = img; }
     return IMAGE_CACHE[src];
 }
+
+// ★ 싱글과 동일한 캔버스 UI 버튼 클래스 추가!
+class UIButton {
+    constructor(x, y, width, height, text, color, onClick) { this.x = x; this.y = y; this.width = width; this.height = height; this.text = text; this.color = color; this.onClick = onClick; }
+    draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.roundRect(this.x, this.y, this.width, this.height, 15); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = "#ffffff"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(this.text, this.x + this.width / 2, this.y + this.height / 2); }
+    isClicked(mx, my) { return mx >= this.x && mx <= this.x + this.width && my >= this.y && my <= this.y + this.height; }
+}
+
+// ★ 멀티 전용 캔버스 버튼 세팅 (뽑기 & 로비 복귀)
+const gameButtons = [
+    new UIButton(40, 1090, 300, 90, "🎲 뽑기 (100G)", "#1565c0", () => {
+        socket.emit('request_gacha');
+    }),
+    new UIButton(380, 1090, 300, 90, "🏃 로비로", "#c62828", () => {
+        window.location.href = '/'; // 메인 로비로 되돌아가기
+    })
+];
 
 function loadGame() {
     const saved = localStorage.getItem('defenseSaveData');
@@ -99,7 +115,7 @@ socket.on('game_state', (data) => {
         if (draggingUnit) data.units.forEach(u => { if (u.id === draggingUnit.id) { u.x = draggingUnit.x; u.y = draggingUnit.y; } });
         units = data.units;
         if (draggingUnit) draggingUnit = units.find(u => u.id === draggingUnit.id);
-        if (selectedUnit) selectedUnit = units.find(u => u.id === selectedUnit.id); // 업데이트 시 선택유닛 동기화
+        if (selectedUnit) selectedUnit = units.find(u => u.id === selectedUnit.id);
     }
     
     if (data.nexusHp !== undefined) nexusHp = data.nexusHp;
@@ -122,15 +138,14 @@ socket.on('game_over', (stats) => {
 
 socket.on('game_clear', (data) => {
     isGameStarted = false;
-    let earnedStones = data.stage * 100; // 멀티 클리어 시 영혼석 2배 지급!
+    let earnedStones = data.stage * 100;
     PlayerProfile.soulStones += earnedStones;
     localStorage.setItem('defenseSaveData', JSON.stringify(PlayerProfile));
     alert(`🎉 협동 모드 클리어! 🎉\n정산 보상: 영혼석 💎 ${earnedStones}개 획득!`);
-    location.reload();
+    window.location.href = '/'; 
 });
 
-document.getElementById('btnGoLobby').addEventListener('click', () => { location.reload(); });
-document.getElementById('btnGacha').addEventListener('click', () => { socket.emit('request_gacha'); });
+document.getElementById('btnGoLobby').addEventListener('click', () => { window.location.href = '/'; });
 
 const popupOverlay = document.getElementById('popupOverlay');
 socket.on('gacha_result', (data) => {
@@ -156,31 +171,32 @@ function handleDown(e) {
     if (!isGameStarted) return;
     const pos = getPointerPos(e);
     
-    // 시너지 토글 터치
+    let btnClicked = false;
+    gameButtons.forEach(b => { 
+        if (b.isClicked(pos.x, pos.y)) { b.onClick(); btnClicked = true; } 
+    });
+    if (btnClicked) return;
+
     if (pos.x >= 10 && pos.x <= 90 && pos.y >= 100 && pos.y <= 130) { isSynergyOpen = !isSynergyOpen; return; }
 
-    // 아이템 인벤토리 터치
     for (let i = 0; i < 5; i++) {
-        let ix = 135 + i * 90; let iy = 1070;
+        let ix = 135 + i * 90; let iy = 995;
         if (pos.x >= ix && pos.x <= ix + 70 && pos.y >= iy && pos.y <= iy + 70) {
             if (myInventory[i]) { draggingItem = { index: i, id: myInventory[i], x: pos.x, y: pos.y }; selectedUnit = null; return; }
         }
     }
     
-    // ★ 싱글과 동일한 하단 고정 UI 패널 터치 판정
     if (selectedUnit && draggingUnit === null) {
         if (pos.y >= 840 && pos.y <= 940) {
             const unitDef = UNIT_DB[selectedUnit.type];
-            // 판매
             if (pos.x >= 590 && pos.x <= 690) { socket.emit('sell_unit', { id: selectedUnit.id }); selectedUnit = null; return; }
-            // 업그레이드
             if (Array.isArray(unitDef.next)) {
                 if (pos.x >= 450 && pos.x <= 580) { if (myGold >= unitDef.upgradeCost) socket.emit('upgrade_unit', { id: selectedUnit.id, next: unitDef.next[1] }); selectedUnit = null; return; }
                 if (pos.x >= 310 && pos.x <= 440) { if (myGold >= unitDef.upgradeCost) socket.emit('upgrade_unit', { id: selectedUnit.id, next: unitDef.next[0] }); selectedUnit = null; return; }
             } else if (unitDef.next) {
                 if (pos.x >= 450 && pos.x <= 580) { if (myGold >= unitDef.upgradeCost) socket.emit('upgrade_unit', { id: selectedUnit.id, next: unitDef.next }); selectedUnit = null; return; }
             }
-            if (pos.x >= 10 && pos.x <= 710) return; // 패널 내부 헛클릭 무시
+            if (pos.x >= 10 && pos.x <= 710) return; 
         }
     }
 
@@ -205,14 +221,13 @@ function handleUp(e) {
 
     if (!draggingUnit) return;
     
-    // ★ 멀티 전용 바둑판 맵핑 연산
     const targetCol = Math.floor((draggingUnit.x - START_X) / TILE_SIZE);
     const targetRow = Math.floor((draggingUnit.y - START_Y) / TILE_SIZE);
     let isValid = true;
 
     if (targetCol < 0 || targetCol > 8 || targetRow < 0 || targetRow > 6) isValid = false;
-    if (mySide === "left" && targetCol > 3) isValid = false; // 중앙선(4) 침범 금지
-    if (mySide === "right" && targetCol < 5) isValid = false; // 중앙선(4) 침범 금지
+    if (mySide === "left" && targetCol > 3) isValid = false; 
+    if (mySide === "right" && targetCol < 5) isValid = false; 
 
     if (isValid) {
         socket.emit('move_unit', { id: draggingUnit.id, gridX: targetCol, gridY: targetRow });
@@ -297,16 +312,29 @@ function drawFixedUnitPanel() {
 function drawGameScreen() {
     if (!isGameStarted) return;
     frameCount++;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     
-    if (bgImage && bgImage.complete) { ctx.drawImage(bgImage, 0, 0, logicalWidth, logicalHeight); } 
-    else { ctx.fillStyle = "#1a1a1a"; ctx.fillRect(0, 0, centerX, logicalHeight); ctx.fillStyle = "#2d2d2d"; ctx.fillRect(centerX, 0, centerX, logicalHeight); }
+    // ★ [핵심 해결] 멀티플레이 배경 찌그러짐 방지 로직 (논리적 해상도 반영)
+    if (bgImage && bgImage.complete && bgImage.naturalWidth !== 0) {
+        const imgRatio = bgImage.width / bgImage.height; 
+        const canvasRatio = logicalWidth / logicalHeight; 
+        let drawW, drawH, drawX, drawY;
+        if (imgRatio > canvasRatio) { 
+            drawH = logicalHeight; drawW = logicalHeight * imgRatio; 
+        } else { 
+            drawW = logicalWidth; drawH = logicalWidth / imgRatio; 
+        }
+        drawX = (logicalWidth - drawW) / 2; drawY = (logicalHeight - drawH) / 2; 
+        ctx.drawImage(bgImage, drawX, drawY, drawW, drawH);
+    } else { 
+        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(0, 0, centerX, logicalHeight); 
+        ctx.fillStyle = "#2d2d2d"; ctx.fillRect(centerX, 0, centerX, logicalHeight); 
+    }
     
-    // ★ 멀티 전용 그리드 그리기 (중앙에 빈 타일 길 조성)
     ctx.strokeStyle = "rgba(255, 255, 255, 0.15)"; ctx.lineWidth = 1;
     for (let r = 0; r < 7; r++) {
         for (let c = 0; c < 9; c++) {
-            if (c === 4) continue; // 중앙 타일은 통로
+            if (c === 4) continue; 
             let tx = START_X + c * TILE_SIZE; let ty = START_Y + r * TILE_SIZE;
             ctx.fillStyle = "rgba(255, 255, 255, 0.05)"; ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
             ctx.strokeRect(tx, ty, TILE_SIZE, TILE_SIZE);
@@ -336,7 +364,7 @@ function drawGameScreen() {
             const img = getSprite(unitDef.imgSrc); const drawSize = 80;
             if (img && img.complete) {
                 const frameW = img.naturalWidth / 2; const frameH = img.naturalHeight / 2;
-                let frameCol = 0; let frameRow = 0; // 멀티는 틱 동기화가 어려워 정지 모션으로 기본 처리
+                let frameCol = 0; let frameRow = 0; 
                 if (draggingUnit && draggingUnit.id === u.id) {
                     ctx.globalAlpha = 0.7; ctx.drawImage(img, frameCol * frameW, frameRow * frameH, frameW, frameH, u.x - drawSize/2, u.y - drawSize/2 - 15, drawSize, drawSize); ctx.globalAlpha = 1.0;
                 } else {
@@ -402,7 +430,7 @@ function drawGameScreen() {
     ctx.fillText("📦 내 아이템 보관함", centerX, 1055);
     
     for (let i = 0; i < 5; i++) { 
-        let ix = 135 + i * 90; let iy = 1070; 
+        let ix = 135 + i * 90; let iy = 995; 
         ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); 
         ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); 
         if (myInventory[i] && (!draggingItem || draggingItem.index !== i)) { 
@@ -418,7 +446,10 @@ function drawGameScreen() {
         ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); 
     }
 
-    drawFixedUnitPanel(); // ★ 싱글플레이의 완벽한 팝업 UI를 멀티에도 출력
+    drawFixedUnitPanel(); 
+    
+    // ★ 캔버스에 추가된 '뽑기' / '로비로' 버튼 그리기
+    gameButtons.forEach(btn => btn.draw());
 
     requestAnimationFrame(drawGameScreen);
 }

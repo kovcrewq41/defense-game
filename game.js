@@ -1,7 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// ★ [해상도 깨짐 보정 로직] 기기의 픽셀 비율을 감지해 강제로 고화질 HD로 뻥튀기합니다!
+// ★ [해상도 보정]
 const logicalWidth = 720; 
 const logicalHeight = 1280;
 const dpr = window.devicePixelRatio || 1;
@@ -11,7 +11,7 @@ canvas.height = logicalHeight * dpr;
 canvas.style.width = `${logicalWidth}px`;
 canvas.style.height = `${logicalHeight}px`;
 
-ctx.scale(dpr, dpr); // 텍스트 및 이미지 선명화 스케일 연동
+ctx.scale(dpr, dpr); 
 
 const centerX = logicalWidth / 2;
 const centerY = 550;
@@ -23,7 +23,7 @@ let selectedUnit = null;
 let draggingUnit = null;
 let monsters = [];
 let projectiles = [];
-let baseHp = 100; // 넥서스 기본 체력 최대치 100 고정
+let baseHp = 100; 
 let frameCount = 0;
 let goldParticles = [];
 let inventory = [];
@@ -70,9 +70,9 @@ function getSprite(src) {
 }
 
 const ITEM_DB = {
-    "SWORD": { name: "B.F대검", color: "#ff5252", symbol: "⚔️", type: "dmg", value: 1.2 }, // 밸런스 조정 (1.3 -> 1.2)
-    "BOW": { name: "곡궁", color: "#69f0ae", symbol: "🏹", type: "spd", value: 0.85 }, // 밸런스 조정 (0.7 -> 0.85)
-    "STAFF": { name: "지팡이", color: "#40c4ff", symbol: "🪄", type: "rng", value: 30 }   // 사거리 보정 (40 -> 30)
+    "SWORD": { name: "B.F대검", color: "#ff5252", symbol: "⚔️", type: "dmg", value: 1.2 }, 
+    "BOW": { name: "곡궁", color: "#69f0ae", symbol: "🏹", type: "spd", value: 0.85 }, 
+    "STAFF": { name: "지팡이", color: "#40c4ff", symbol: "🪄", type: "rng", value: 30 }   
 };
 
 function saveGame() {
@@ -105,10 +105,10 @@ const Sound = {
         gain.gain.setValueAtTime(vol, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
         osc.start(); osc.stop(audioCtx.currentTime + duration);
     },
-    shoot: () => {}, // ★ 기본 슛 사운드 삭제 (귀 피로감 전면 해결)
-    hit: () => Sound.play(150, 'sawtooth', 0.1, 0.01, 50), // 타격음 볼륨 최소화 (0.03 -> 0.01)
+    shoot: () => {}, 
+    hit: () => Sound.play(150, 'sawtooth', 0.1, 0.01, 50), 
     heal: () => Sound.play(800, 'sine', 0.2, 0.02, 1200),
-    crit: () => Sound.play(300, 'sawtooth', 0.15, 0.02, 100), // 크리 볼륨 최소화 (0.05 -> 0.02)
+    crit: () => Sound.play(300, 'sawtooth', 0.15, 0.02, 100), 
     coin: () => { Sound.play(1200, 'sine', 0.1, 0.02); setTimeout(() => Sound.play(1600, 'sine', 0.15, 0.02), 50); },
     boss: () => Sound.play(100, 'square', 1.0, 0.05, 50),
     clear: () => { Sound.play(400, 'sine', 0.2, 0.05); setTimeout(() => Sound.play(600, 'sine', 0.4, 0.05), 200); },
@@ -144,7 +144,7 @@ class Projectile {
         if (distance < 15) {
             if (this.target.isBase) { 
                 baseHp += this.baseDamage; 
-                if (baseHp > 100) baseHp = 100; // ★ 힐러 무제한 무한 넥서스 힐 버그 픽스
+                if (baseHp > 100) baseHp = 100; 
                 Sound.heal(); 
                 this.active = false; 
                 return; 
@@ -154,8 +154,6 @@ class Projectile {
             if (this.effect === "splash" || this.effect === "deep_splash") { let splashRadius = (this.effect === "deep_splash") ? 100 : 50; for (let m of monsters) { if (Math.hypot(m.x - this.x, m.y - this.y) < splashRadius) m.hp -= finalDamage; } } else { this.target.hp -= finalDamage; }
             if (this.effect === "slow") this.target.speed = Math.max(0.3, this.target.speed - 0.1); else if (this.effect === "deep_slow") this.target.speed = Math.max(0.1, this.target.speed - 0.3); else if (this.effect === "stun") this.target.stunTimer = 60; else if (this.effect === "deep_stun") this.target.stunTimer = 120;
             this.active = false; 
-            
-            // ★ 잔렉 유발 크리티컬 쉐이크 기능 비활성화로 멀미감 차단
             if (this.effect === "crit") { Sound.crit(); } else { Sound.hit(); }
         } else { this.x += (dx / distance) * this.speed; this.y += (dy / distance) * this.speed; }
     }
@@ -169,7 +167,6 @@ class Unit {
         const data = UNIT_DB[id]; 
         this.name = data.name; 
         this.color = data.color; 
-        // ★ 전직 시 시너지 정보 증발 오류 해결 방어 로직 추가
         this.trait = data.trait || this.id.split('_')[0]; 
         this.upgradeCost = data.upgradeCost; 
         this.sellPrice = data.sellPrice; 
@@ -196,7 +193,6 @@ class Unit {
             let relicDmgMult = 1 + (r1Lvl * 0.1); if (r5Lvl > 0) relicDmgMult *= Math.pow(2, r5Lvl);
             
             buffedCooldown = Math.floor(buffedCooldown * Math.pow(0.9, r2Lvl));
-            // ★ 무제한 연사로 인한 브라우저 과부하 방지 안전장치 (최하 10프레임 한계 고정)
             if (buffedCooldown < 10) buffedCooldown = 10;
 
             const passiveMultiplier = 1 + (PlayerProfile.passives.attackBoostLvl * 0.05); const classMasteryLvl = PlayerProfile.mastery[this.trait] || 0; const masteryMultiplier = 1 + (classMasteryLvl * 0.1);
@@ -212,12 +208,9 @@ class Unit {
         if (img && img.complete && img.naturalWidth > 0) { 
             const frameW = img.naturalWidth / 2; const frameH = img.naturalHeight / 2; const drawSize = 80; 
             let frameCol = 0; let frameRow = 0; 
-            
-            // ★ 조잡한 무한 대기 액션 전면 제거, 공격 쿨다운 시에만 모션 작동하도록 고정
             if (this.attackAnimTimer > 10) { frameCol = 0; frameRow = 1; } 
             else if (this.attackAnimTimer > 0) { frameCol = 1; frameRow = 1; } 
             else { frameCol = 0; frameRow = 0; } 
-            
             ctx.drawImage(img, frameCol * frameW, frameRow * frameH, frameW, frameH, this.x - drawSize / 2, this.y - drawSize / 2, drawSize, drawSize); 
         }
         else { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.stroke(); }
@@ -271,7 +264,6 @@ function getValidSpawnPos() {
     if (emptyTiles.length === 0) return null; return emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
 }
 
-// ★ 기획안 반영: 롤토체스식 중복 제거 시너지 카운트 규칙 유지
 function calculateSynergies() {
     activeSynergies = { SWORD: 0, ARCHER: 0, MAGE: 0, SHIELD: 0, ASSASSIN: 0, CANNON: 0, PRIEST: 0 };
     const uniqueIds = [...new Set(units.map(u => u.id))]; 
@@ -288,7 +280,7 @@ const menuButtons = [
     
     new UIButton(centerX - 175, 570, 350, 80, "전투 시작 (싱글)", "#2e7d32", () => {
         currentScene = 'GAME'; units = []; monsters = []; projectiles = []; goldParticles = []; inventory = []; draggingItem = null; baseHp = 100; frameCount = 0; currentWave = 1;
-        countdownTimer = 300; // 전투 시작전 5초 배치 유예 시간 활성화
+        countdownTimer = 300; 
         PlayerProfile.gold = 500 + (PlayerProfile.passives.startGoldLvl * 50); calculateSynergies();
         const r4Lvl = PlayerProfile.relics["R4"] || 0;
         for (let i = 0; i < r4Lvl; i++) { const pos = getValidSpawnPos(); if (pos) { const arr = ["SWORD_3A", "ARCHER_3A", "MAGE_3A", "SHIELD_3A", "ASSASSIN_3A", "CANNON_3A", "PRIEST_3A"]; units.push(new Unit(arr[Math.floor(Math.random() * arr.length)], pos.col, pos.row)); } }
@@ -356,7 +348,15 @@ const gameButtons = [
     new UIButton(380, 1090, 300, 90, "🏃 포기", "#c62828", () => { currentScene = 'MAIN_MENU'; })
 ];
 
-function getPointerPos(event) { const rect = canvas.getBoundingClientRect(); const clientX = event.touches ? event.touches[0].clientX : event.clientX; const clientY = event.touches ? event.touches[0].clientY : event.clientY; return { x: (clientX - rect.left) * (logicalWidth / rect.width), y: (clientY - rect.top) * (logicalHeight / rect.height) }; }
+function getPointerPos(event) { 
+    const rect = canvas.getBoundingClientRect(); 
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX; 
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY; 
+    return { 
+        x: (clientX - rect.left) * (logicalWidth / rect.width), 
+        y: (clientY - rect.top) * (logicalHeight / rect.height) 
+    }; 
+}
 
 function handleDown(event) {
     if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
@@ -365,7 +365,6 @@ function handleDown(event) {
     if (currentScene === 'GAME') {
         if (pos.x >= 10 && pos.x <= 90 && pos.y >= 100 && pos.y <= 130) { isSynergyOpen = !isSynergyOpen; return; }
         
-        // ★ 하단 고정 UI 패널 터치 이벤트 가로 연동 (간섭 및 터치 겹침 100% 완전 해결)
         if (selectedUnit && draggingUnit === null) {
             if (pos.y >= 840 && pos.y <= 940) {
                 if (pos.x >= 590 && pos.x <= 690) {
@@ -373,14 +372,14 @@ function handleDown(event) {
                     units = units.filter(u => u !== selectedUnit); selectedUnit = null; return;
                 }
                 if (Array.isArray(selectedUnit.next)) {
-                    if (pos.x >= 450 && pos.x <= 580) { // 오른쪽 분기 전직
+                    if (pos.x >= 450 && pos.x <= 580) { 
                         if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next[1]); selectedUnit = null; } return;
                     }
-                    if (pos.x >= 310 && pos.x <= 440) { // 왼쪽 분기 전직
+                    if (pos.x >= 310 && pos.x <= 440) { 
                         if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next[0]); selectedUnit = null; } return;
                     }
                 } else if (selectedUnit.next) {
-                    if (pos.x >= 450 && pos.x <= 580) { // 단일 전직 및 레어 업글
+                    if (pos.x >= 450 && pos.x <= 580) { 
                         if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next); selectedUnit = null; } return;
                     }
                 }
@@ -418,7 +417,6 @@ function handleUp(event) {
 }
 canvas.addEventListener('mousedown', handleDown); canvas.addEventListener('mousemove', handleMove); canvas.addEventListener('mouseup', handleUp); canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleDown(e); }, { passive: false }); canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, { passive: false }); canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleUp(e); }, { passive: false });
 
-// ★ 가로형 압축 시너지 UI (토글 버튼 완벽 연동)
 function drawUI() {
     ctx.fillStyle = "#ffdd57"; ctx.font = "bold 28px Malgun Gothic"; ctx.textAlign = "center";
     ctx.fillText(`보유 골드: ${PlayerProfile.gold} G`, centerX, 80);
@@ -442,7 +440,6 @@ function drawUI() {
     }
 }
 
-// ★ [혁신] 하단 고정 UI 패널 그리기 (골드 비용 가독성 및 분기 텍스트 가시성 극대화)
 function drawFixedUnitPanel() {
     if (!selectedUnit) return;
     
@@ -457,16 +454,13 @@ function drawFixedUnitPanel() {
     ctx.fillStyle = "#ddd"; ctx.font = "16px Malgun Gothic";
     ctx.fillText(`공격력: ${selectedUnit.damage}  |  공속: ${selectedUnit.cooldown}  |  사거리: ${selectedUnit.range}`, 25, 915);
 
-    // 판매 UI 영역 설정
     ctx.fillStyle = "#c62828"; ctx.fillRect(590, 850, 100, 80);
     ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = "bold 16px Malgun Gothic";
     ctx.fillText("💰 판매", 640, 880); 
     ctx.fillStyle = "#ffdd57"; ctx.font = "bold 20px Arial"; 
     ctx.fillText(`+${selectedUnit.sellPrice} G`, 640, 910);
 
-    // 업그레이드 전직 UI 분기 연동
     if (Array.isArray(selectedUnit.next)) {
-        // 우측 루트 전직 버튼
         ctx.fillStyle = (PlayerProfile.gold >= selectedUnit.upgradeCost) ? "#1565c0" : "#444";
         ctx.fillRect(450, 850, 130, 80); 
         ctx.fillStyle = "#fff"; ctx.font = "bold 15px Malgun Gothic";
@@ -474,7 +468,6 @@ function drawFixedUnitPanel() {
         ctx.fillStyle = (PlayerProfile.gold >= selectedUnit.upgradeCost) ? "#ffea00" : "#ff5252";
         ctx.font = "bold 18px Arial"; ctx.fillText(`${selectedUnit.upgradeCost} G`, 515, 910);
         
-        // 좌측 루트 전직 버튼
         ctx.fillStyle = (PlayerProfile.gold >= selectedUnit.upgradeCost) ? "#2e7d32" : "#444";
         ctx.fillRect(310, 850, 130, 80); 
         ctx.fillStyle = "#fff"; ctx.font = "bold 15px Malgun Gothic";
@@ -483,7 +476,6 @@ function drawFixedUnitPanel() {
         ctx.font = "bold 18px Arial"; ctx.fillText(`${selectedUnit.upgradeCost} G`, 375, 910);
 
     } else if (selectedUnit.next) {
-        // 일반 단일 진화 연동
         ctx.fillStyle = (PlayerProfile.gold >= selectedUnit.upgradeCost) ? "#2e7d32" : "#444";
         ctx.fillRect(450, 850, 130, 80); 
         ctx.fillStyle = "#fff"; ctx.font = "bold 16px Malgun Gothic";
@@ -497,24 +489,37 @@ function drawFixedUnitPanel() {
 }
 
 function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight);
+    
+    // ★ [핵심 해결 로직] 찌그러짐 방지를 위해 배경 비율을 강제로 화면에 맞게 재계산!
     if (bgImage && bgImage.complete && bgImage.naturalWidth !== 0) {
-        const imgRatio = bgImage.width / bgImage.height; const canvasRatio = canvas.width / canvas.height; let drawW, drawH, drawX, drawY;
-        if (imgRatio > canvasRatio) { drawH = canvas.height; drawW = canvas.height * imgRatio; } else { drawW = canvas.width; drawH = canvas.width / imgRatio; }
-        drawX = (canvas.width - drawW) / 2; drawY = (canvas.height - drawH) / 2; ctx.drawImage(bgImage, drawX, drawY, drawW, drawH);
+        const imgRatio = bgImage.width / bgImage.height; 
+        const canvasRatio = logicalWidth / logicalHeight; 
+        let drawW, drawH, drawX, drawY;
+        if (imgRatio > canvasRatio) { 
+            drawH = logicalHeight; 
+            drawW = logicalHeight * imgRatio; 
+        } else { 
+            drawW = logicalWidth; 
+            drawH = logicalWidth / imgRatio; 
+        }
+        drawX = (logicalWidth - drawW) / 2; 
+        drawY = (logicalHeight - drawH) / 2; 
+        ctx.drawImage(bgImage, drawX, drawY, drawW, drawH);
+        
         const startX = centerX - (GRID_COLS * TILE_SIZE) / 2; const startY = centerY - (GRID_ROWS * TILE_SIZE) / 2;
         for (let r = 0; r < GRID_ROWS; r++) { for (let c = 0; c < GRID_COLS; c++) { const tx = startX + c * TILE_SIZE; const ty = startY + r * TILE_SIZE; ctx.fillStyle = "rgba(255, 255, 255, 0.05)"; ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE); ctx.strokeStyle = "rgba(255, 255, 255, 0.15)"; ctx.lineWidth = 1; ctx.strokeRect(tx, ty, TILE_SIZE, TILE_SIZE); } }
-    } else { ctx.fillStyle = "red"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    } else { ctx.fillStyle = "red"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); }
 
     ctx.save();
     if (screenShake > 0) { const dx = (Math.random() - 0.5) * screenShake; const dy = (Math.random() - 0.5) * screenShake; ctx.translate(dx, dy); screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
 
-    if (currentScene === 'MAIN_MENU') { ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#ffd700"; ctx.font = "bold 60px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("업그레이드 디펜스", centerX, 300); menuButtons.forEach(btn => btn.draw()); }
-    else if (currentScene === 'GAME_OVER') { ctx.fillStyle = "#222"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#ff5252"; ctx.font = "bold 80px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", centerX, 300); ctx.fillStyle = "#fff"; ctx.font = "30px Malgun Gothic"; ctx.fillText(`처치한 몬스터: ${sessionStats.kills}마리`, centerX, 450); ctx.fillText(`최고 웨이브: ${sessionStats.maxWave}`, centerX, 500); ctx.fillText(`획득한 골드: ${sessionStats.goldEarned}G`, centerX, 550); gameOverButtons.forEach(btn => btn.draw()); }
-    else if (currentScene === 'PASSIVE_TREE') { ctx.fillStyle = "#1e272c"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("🌳 영구 패시브 성장", centerX, 120); ctx.fillStyle = "#ffd700"; ctx.font = "bold 30px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 200); passiveButtons.forEach(btn => btn.draw()); }
-    else if (currentScene === 'DEX') { ctx.fillStyle = "#2e1c0c"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("📖 영웅 도감 & 마스터리", centerX, 80); ctx.fillStyle = "#ffd700"; ctx.font = "bold 26px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 130); dexButtons.forEach(btn => btn.draw()); }
+    if (currentScene === 'MAIN_MENU') { ctx.fillStyle = "#111"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffd700"; ctx.font = "bold 60px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("업그레이드 디펜스", centerX, 300); menuButtons.forEach(btn => btn.draw()); }
+    else if (currentScene === 'GAME_OVER') { ctx.fillStyle = "#222"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ff5252"; ctx.font = "bold 80px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", centerX, 300); ctx.fillStyle = "#fff"; ctx.font = "30px Malgun Gothic"; ctx.fillText(`처치한 몬스터: ${sessionStats.kills}마리`, centerX, 450); ctx.fillText(`최고 웨이브: ${sessionStats.maxWave}`, centerX, 500); ctx.fillText(`획득한 골드: ${sessionStats.goldEarned}G`, centerX, 550); gameOverButtons.forEach(btn => btn.draw()); }
+    else if (currentScene === 'PASSIVE_TREE') { ctx.fillStyle = "#1e272c"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("🌳 영구 패시브 성장", centerX, 120); ctx.fillStyle = "#ffd700"; ctx.font = "bold 30px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 200); passiveButtons.forEach(btn => btn.draw()); }
+    else if (currentScene === 'DEX') { ctx.fillStyle = "#2e1c0c"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("📖 영웅 도감 & 마스터리", centerX, 80); ctx.fillStyle = "#ffd700"; ctx.font = "bold 26px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 130); dexButtons.forEach(btn => btn.draw()); }
     else if (currentScene === 'RELIQUARY') {
-        ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("🔮 유물 뽑기", centerX, 80); ctx.fillStyle = "#ffd700"; ctx.font = "bold 26px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 130);
+        ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("🔮 유물 뽑기", centerX, 80); ctx.fillStyle = "#ffd700"; ctx.font = "bold 26px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 130);
         if (gachaState === "IDLE") { relicButtons.forEach(btn => btn.draw()); let startY = 220; ctx.fillStyle = "#aaa"; ctx.font = "18px Malgun Gothic"; ctx.fillText("보유 중인 유물 현황 (최대 5종)", centerX, startY); startY += 40; for (let key in PlayerProfile.relics) { if (PlayerProfile.relics[key] > 0) { let rDef = RELIC_DB[key]; ctx.fillStyle = rDef.color; ctx.font = "bold 22px Malgun Gothic"; ctx.fillText(`[${rDef.grade}] ${rDef.name} Lv.${PlayerProfile.relics[key]}`, centerX, startY); startY += 30; } } }
         else if (gachaState === "SPINNING") { gachaTimer--; screenShake = 5; ctx.fillStyle = "#fff"; ctx.font = "bold 30px Malgun Gothic"; ctx.fillText("두구두구두구...", centerX, 400); if (gachaTimer <= 0) { gachaState = "RESULT"; gachaTimer = 180; const rData = RELIC_DB[currentPull]; if (rData.grade === "SS") { screenShake = 40; Sound.legendary(); } else if (rData.grade === "S" || rData.grade === "A") { screenShake = 15; Sound.epic(); } else { screenShake = 5; Sound.clear(); } for (let i = 0; i < 60; i++) gachaParticles.push(new GachaParticle(centerX, 400, rData.color)); } }
         else if (gachaState === "RESULT") { gachaTimer--; const rData = RELIC_DB[currentPull]; gachaParticles.forEach((p, i) => { if (!p.update()) gachaParticles.splice(i, 1); else p.draw(); }); ctx.fillStyle = rData.color; ctx.font = "bold 50px Malgun Gothic"; ctx.shadowColor = rData.color; ctx.shadowBlur = 20; ctx.fillText(`[${rData.grade}] ${rData.name}!`, centerX, 400); ctx.shadowBlur = 0; ctx.fillStyle = "#fff"; ctx.font = "24px Malgun Gothic"; ctx.fillText(rData.desc, centerX, 460); if (gachaTimer <= 0) gachaState = "IDLE"; }
@@ -523,11 +528,10 @@ function gameLoop() {
         calculateSynergies();
         ctx.fillStyle = "#0288d1"; ctx.beginPath(); ctx.arc(centerX, centerY, 30, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#fff"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText(`HP ${baseHp}`, centerX, centerY + 7);
         
-        // ★ 전장 시작 5초 전 카운트다운 타임 연동
         if (countdownTimer > 0) {
             countdownTimer--;
             units.forEach(unit => { unit.updatePosition(); unit.draw(); });
-            ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; ctx.fillRect(0, 0, logicalWidth, logicalHeight);
             ctx.fillStyle = "#ffdd57"; ctx.font = "bold 80px Malgun Gothic"; ctx.textAlign = "center";
             let sec = Math.ceil(countdownTimer / 60);
             ctx.fillText(`전투 시작 ${sec}초 전!`, centerX, centerY - 50);
@@ -537,15 +541,13 @@ function gameLoop() {
             frameCount++;
             if (currentWave <= STAGE_DB[selectedStage].maxWave) { 
                 if (frameCount % 60 === 0 && frameCount % 600 !== 0) monsters.push(new Monster(false, false));
-                
-                // ★ 5라운드(600프레임) 단위 중간 보스 및 최종 20라운드 최종 보스 출격 설정
                 if (frameCount % 600 === 0 && frameCount > 0) { 
                     let isFinal = (currentWave === STAGE_DB[selectedStage].maxWave); 
                     let isMidBoss = (currentWave % 5 === 0);
                     if (isMidBoss || isFinal) { 
                         monsters.push(new Monster(true, isFinal)); 
                         Sound.boss(); 
-                        screenShake = Math.max(screenShake, 15); // ★ 보스 등장시에만 화면 쉐이크 작동!
+                        screenShake = Math.max(screenShake, 15);
                     }
                     let waveBonusGold = currentWave * 20; PlayerProfile.gold += waveBonusGold; goldParticles.push(new GoldParticle(centerX, centerY - 50, waveBonusGold, false));
                     if (!isFinal) currentWave++; 
@@ -576,12 +578,12 @@ function gameLoop() {
             for (let i = goldParticles.length - 1; i >= 0; i--) { let p = goldParticles[i]; if (!p.update()) goldParticles.splice(i, 1); else p.draw(); }
         }
         
-        ctx.fillStyle = "#222"; ctx.fillRect(0, 950, canvas.width, 330); ctx.fillStyle = "#444"; ctx.fillRect(0, 950, canvas.width, 10); ctx.fillStyle = "#aaa"; ctx.font = "20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("보스를 잡아 획득한 아이템을 유닛에게 드래그하세요!", centerX, 980);
+        ctx.fillStyle = "#222"; ctx.fillRect(0, 950, logicalWidth, 330); ctx.fillStyle = "#444"; ctx.fillRect(0, 950, logicalWidth, 10); ctx.fillStyle = "#aaa"; ctx.font = "20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("보스를 잡아 획득한 아이템을 유닛에게 드래그하세요!", centerX, 980);
         for (let i = 0; i < 5; i++) { let ix = 145 + i * 90; let iy = 995; ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); if (inventory[i] && (!draggingItem || draggingItem.index !== i)) { let item = ITEM_DB[inventory[i]]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); } }
         if (draggingItem) { let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); }
         
         drawUI();
-        drawFixedUnitPanel(); // 하단 탭 고정 연산 패널 출력
+        drawFixedUnitPanel();
         gameButtons.forEach(btn => btn.draw()); 
     }
     ctx.restore(); requestAnimationFrame(gameLoop);
