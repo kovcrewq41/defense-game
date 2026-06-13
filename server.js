@@ -18,7 +18,6 @@ const ITEM_DB = {
     "STAFF": { type: "rng", value: 30 }
 };
 
-// ★ 멀티 전용 스테이지 난이도 (싱글보다 몬스터 체력 2배)
 const STAGE_DB = {
     1: { maxWave: 20, hpMultiplier: 2.0 },
     2: { maxWave: 20, hpMultiplier: 6.0 },
@@ -26,7 +25,6 @@ const STAGE_DB = {
     4: { maxWave: 20, hpMultiplier: 30.0 }
 };
 
-// ★ 그리드 좌표 계산 유틸 (왼쪽: 0~3열, 오른쪽: 5~8열)
 function getValidSpawnPos(room, side) {
     let cols = side === "left" ? [0, 1, 2, 3] : [5, 6, 7, 8];
     let emptyTiles = [];
@@ -46,7 +44,6 @@ setInterval(() => {
         let room = rooms[roomCode];
         if (room.players.length === 2 && !room.isGameOver) {
             
-            // ★ 전투 시작 5초 카운트다운
             if (room.countdown > 0) {
                 room.countdown--;
                 io.to(roomCode).emit('game_state', { countdown: room.countdown, monsters: room.monsters, units: room.units, projectiles: room.projectiles, nexusHp: room.nexusHp, players: room.players, currentWave: room.currentWave, maxWave: STAGE_DB[room.stage].maxWave });
@@ -102,7 +99,7 @@ setInterval(() => {
                         buffedDamage = Math.floor(buffedDamage * (1 + attackBoostLvl * 0.05) * (1 + masteryLvl * 0.1) * relicMult);
                         buffedCooldown = Math.floor(buffedCooldown * Math.pow(0.9, r2));
                     }
-                    if (buffedCooldown < 10) buffedCooldown = 10; // ★ 멀티서버 과부하 방지 한계치
+                    if (buffedCooldown < 10) buffedCooldown = 10; 
 
                     if (u.type.startsWith("PRIEST")) {
                         room.projectiles.push({ id: Math.random().toString(36).substr(2, 9), x: u.x, y: u.y, targetId: "NEXUS", damage: buffedDamage, speed: 15, side: u.side, isHeal: true });
@@ -150,7 +147,7 @@ setInterval(() => {
                         target.isDead = true; room.stats.kills++; 
                         let owner = room.players.find(player => player.side === p.side);
                         let bonusGold = (owner && owner.profile && owner.profile.relics["R3"]) ? owner.profile.relics["R3"] * 5 : 0;
-                        let earnedGold = (target.isBoss ? 300 : 30) + bonusGold; // ★ 멀티 보상 2배!
+                        let earnedGold = (target.isBoss ? 300 : 30) + bonusGold; 
 
                         room.stats.goldEarned += earnedGold;
                         if (owner) {
@@ -180,18 +177,16 @@ setInterval(() => {
                 io.to(roomCode).emit('game_over', room.stats);
             }
 
-            // ★ 멀티 전용 20웨이브 및 5단위 보스 로직
             if (!room.isGameOver && room.currentWave <= STAGE_DB[room.stage].maxWave) {
                 let maxWave = STAGE_DB[room.stage].maxWave;
                 if (room.frameCount % 600 === 0) { 
                     let isFinal = (room.currentWave === maxWave);
                     let isMidBoss = (room.currentWave % 5 === 0);
                     if (isMidBoss || isFinal) {
-                        let maxHp = (500 + room.frameCount) * STAGE_DB[room.stage].hpMultiplier; // 2배 피통
+                        let maxHp = (500 + room.frameCount) * STAGE_DB[room.stage].hpMultiplier; 
                         room.monsters.push({ id: Math.random().toString(36).substr(2, 9), x: 100 + Math.random() * 520, y: -30, speed: 0.3, hp: maxHp, maxHp: maxHp, isBoss: true, stunTimer: 0 });
                     }
                     
-                    // 웨이브 클리어 보상 지급 (모두에게)
                     let waveBonus = room.currentWave * 30;
                     room.players.forEach(p => p.gold += waveBonus);
                     if (!isFinal) room.currentWave++;
@@ -220,7 +215,7 @@ io.on('connection', (socket) => {
 
         socket.join(roomCode); 
         let side = room.players.length === 0 ? "left" : "right";
-        let startGold = 1000 + ((profile.passives?.startGoldLvl || 0) * 50); // 멀티 시작 골드 상향
+        let startGold = 1000 + ((profile.passives?.startGoldLvl || 0) * 50); 
         room.players.push({ id: socket.id, side: side, gold: startGold, profile: profile, inventory: [] });
         
         socket.emit('assign_side', side);
@@ -238,8 +233,10 @@ io.on('connection', (socket) => {
 
                 me.gold -= 100;
                 let randomUnitId = baseUnits[Math.floor(Math.random() * baseUnits.length)];
-                let spawnX = 40 + pos.col * 80 + 40; // TILE_SIZE=80 중앙
-                let spawnY = 270 + pos.row * 80 + 40; // START_Y=270
+                
+                // ★ 좌표 교정 (40 삐져나감 방지)
+                let spawnX = pos.col * 80 + 40; 
+                let spawnY = 270 + pos.row * 80 + 40; 
                 
                 let newUnit = { id: Math.random().toString(36).substr(2, 9), gridX: pos.col, gridY: pos.row, x: spawnX, y: spawnY, side: me.side, type: randomUnitId, items: [] };
                 room.units.push(newUnit);
@@ -255,14 +252,13 @@ io.on('connection', (socket) => {
             let room = rooms[myRoomCode];
             let unit = room.units.find(u => u.id === data.id);
             if (unit && unit.side === me.side) { 
-                // 해당 자리에 이미 유닛이 있는지 스왑 처리 로직
                 let targetUnit = room.units.find(u => u !== unit && u.gridX === data.gridX && u.gridY === data.gridY);
                 if (targetUnit && targetUnit.side === me.side) {
                     targetUnit.gridX = unit.gridX; targetUnit.gridY = unit.gridY;
-                    targetUnit.x = 40 + targetUnit.gridX * 80 + 40; targetUnit.y = 270 + targetUnit.gridY * 80 + 40;
+                    targetUnit.x = targetUnit.gridX * 80 + 40; targetUnit.y = 270 + targetUnit.gridY * 80 + 40;
                 }
                 unit.gridX = data.gridX; unit.gridY = data.gridY; 
-                unit.x = 40 + unit.gridX * 80 + 40; unit.y = 270 + unit.gridY * 80 + 40;
+                unit.x = unit.gridX * 80 + 40; unit.y = 270 + unit.gridY * 80 + 40;
             }
         }
     });

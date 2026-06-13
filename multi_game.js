@@ -1,25 +1,44 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// ★ [해상도 보정]
 const logicalWidth = 720; 
 const logicalHeight = 1280;
 const dpr = window.devicePixelRatio || 1;
 
-
-
 canvas.width = logicalWidth * dpr;
 canvas.height = logicalHeight * dpr;
-// ★ 3. [핵심 해결] 스마트폰 화면에 맞춰 비율 자동 축소! (확대/잘림 방지)
-canvas.style.width = "100%";       // 기기 가로폭에 100% 맞춤
-canvas.style.maxWidth = "720px";   // PC에서는 너무 커지지 않게 제한
-canvas.style.height = "auto";      // 세로 길이는 가로 비율에 맞춰 자동으로 예쁘게 줄어듦!
 
+// ★ [핵심 완벽 해결] 화면 찌그러짐, 잘림 현상 방지 및 HTML 잔재 숨김 처리
+document.body.style.margin = "0";
+document.body.style.overflow = "hidden";
+document.body.style.backgroundColor = "#000";
+
+function resizeCanvas() {
+    const windowRatio = window.innerWidth / window.innerHeight;
+    const gameRatio = logicalWidth / logicalHeight;
+    
+    if (windowRatio < gameRatio) {
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = (window.innerWidth / gameRatio) + 'px';
+    } else {
+        canvas.style.width = (window.innerHeight * gameRatio) + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+    }
+    
+    canvas.style.position = "absolute";
+    canvas.style.left = "50%";
+    canvas.style.top = "50%";
+    canvas.style.transform = "translate(-50%, -50%)";
+    canvas.style.zIndex = "100"; // 캔버스를 맨 위로 올려 예전 HTML 버튼을 다 덮어버림
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 ctx.scale(dpr, dpr);
-const centerX = logicalWidth / 2;
-const centerY = 550; // (멀티플레이 파일에는 이 줄이 없을 수 있으니 참고만 하세요)
 
+const centerX = logicalWidth / 2;
 const socket = io("https://defense-game-ilbv.onrender.com");
+
 let mySide = ""; 
 let myGold = 0;
 let myInventory = []; 
@@ -41,7 +60,8 @@ let origGridX = 0; let origGridY = 0;
 let draggingItem = null; 
 
 const TILE_SIZE = 80;
-const START_X = 40; 
+// ★ 좌표 교정 (40 삐져나감 픽스)
+const START_X = 0; 
 const START_Y = 270; 
 
 const ITEM_DB = {
@@ -58,21 +78,15 @@ function getSprite(src) {
     return IMAGE_CACHE[src];
 }
 
-// ★ 싱글과 동일한 캔버스 UI 버튼 클래스 추가!
 class UIButton {
     constructor(x, y, width, height, text, color, onClick) { this.x = x; this.y = y; this.width = width; this.height = height; this.text = text; this.color = color; this.onClick = onClick; }
     draw() { ctx.fillStyle = this.color; ctx.beginPath(); ctx.roundRect(this.x, this.y, this.width, this.height, 15); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = "#ffffff"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(this.text, this.x + this.width / 2, this.y + this.height / 2); }
     isClicked(mx, my) { return mx >= this.x && mx <= this.x + this.width && my >= this.y && my <= this.y + this.height; }
 }
 
-// ★ 멀티 전용 캔버스 버튼 세팅 (뽑기 & 로비 복귀)
 const gameButtons = [
-    new UIButton(40, 1090, 300, 90, "🎲 뽑기 (100G)", "#1565c0", () => {
-        socket.emit('request_gacha');
-    }),
-    new UIButton(380, 1090, 300, 90, "🏃 로비로", "#c62828", () => {
-        window.location.href = '/'; // 메인 로비로 되돌아가기
-    })
+    new UIButton(40, 1090, 300, 90, "🎲 뽑기 (100G)", "#1565c0", () => { socket.emit('request_gacha'); }),
+    new UIButton(380, 1090, 300, 90, "🏃 로비로", "#c62828", () => { window.location.href = '/'; })
 ];
 
 function loadGame() {
@@ -96,12 +110,20 @@ const roomInput = document.getElementById('roomInput');
 const joinBtn = document.getElementById('joinBtn');
 const statusMsg = document.getElementById('statusMsg');
 
+// ★ 로비에 '싱글플레이로 돌아가기' 버튼 동적 생성
+const backBtn = document.createElement('button');
+backBtn.innerText = "🏃 메인화면(싱글)으로 돌아가기";
+backBtn.style.cssText = "display:block; width:100%; padding:15px; margin-top:20px; font-size:18px; font-weight:bold; background-color:#c62828; color:white; border:none; border-radius:10px; cursor:pointer;";
+backBtn.onclick = () => window.location.href = '/';
+lobby.appendChild(backBtn);
+
 joinBtn.addEventListener('click', () => {
     if (roomInput.value.trim()) {
         joinBtn.disabled = true;
         socket.emit('join_room', { roomCode: roomInput.value.trim(), profile: PlayerProfile });
         statusMsg.textContent = "방 입장 완료! 다른 플레이어를 기다리는 중...";
         joinBtn.style.display = "none"; roomInput.style.display = "none";
+        backBtn.style.display = "none";
     }
 });
 
@@ -149,8 +171,6 @@ socket.on('game_clear', (data) => {
     alert(`🎉 협동 모드 클리어! 🎉\n정산 보상: 영혼석 💎 ${earnedStones}개 획득!`);
     window.location.href = '/'; 
 });
-
-document.getElementById('btnGoLobby').addEventListener('click', () => { window.location.href = '/'; });
 
 const popupOverlay = document.getElementById('popupOverlay');
 socket.on('gacha_result', (data) => {
@@ -319,7 +339,6 @@ function drawGameScreen() {
     frameCount++;
     ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     
-    // ★ [핵심 해결] 멀티플레이 배경 찌그러짐 방지 로직 (논리적 해상도 반영)
     if (bgImage && bgImage.complete && bgImage.naturalWidth !== 0) {
         const imgRatio = bgImage.width / bgImage.height; 
         const canvasRatio = logicalWidth / logicalHeight; 
@@ -452,8 +471,6 @@ function drawGameScreen() {
     }
 
     drawFixedUnitPanel(); 
-    
-    // ★ 캔버스에 추가된 '뽑기' / '로비로' 버튼 그리기
     gameButtons.forEach(btn => btn.draw());
 
     requestAnimationFrame(drawGameScreen);

@@ -1,18 +1,41 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// ★ [해상도 보정]
 const logicalWidth = 720; 
 const logicalHeight = 1280;
 const dpr = window.devicePixelRatio || 1;
 
 canvas.width = logicalWidth * dpr;
 canvas.height = logicalHeight * dpr;
-canvas.style.width = `${logicalWidth}px`;
-canvas.style.height = `${logicalHeight}px`;
 
-ctx.scale(dpr, dpr); 
+// ★ 싱글플레이도 비율 자동 축소(Letterbox) 완벽 적용
+document.body.style.margin = "0";
+document.body.style.overflow = "hidden";
+document.body.style.backgroundColor = "#000";
 
+function resizeCanvas() {
+    const windowRatio = window.innerWidth / window.innerHeight;
+    const gameRatio = logicalWidth / logicalHeight;
+    
+    if (windowRatio < gameRatio) {
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = (window.innerWidth / gameRatio) + 'px';
+    } else {
+        canvas.style.width = (window.innerHeight * gameRatio) + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+    }
+    
+    canvas.style.position = "absolute";
+    canvas.style.left = "50%";
+    canvas.style.top = "50%";
+    canvas.style.transform = "translate(-50%, -50%)";
+    canvas.style.zIndex = "100";
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+ctx.scale(dpr, dpr);
 const centerX = logicalWidth / 2;
 const centerY = 550;
 
@@ -144,7 +167,7 @@ class Projectile {
         if (distance < 15) {
             if (this.target.isBase) { 
                 baseHp += this.baseDamage; 
-                if (baseHp > 100) baseHp = 100; 
+                if (baseHp > 100) baseHp = 100;
                 Sound.heal(); 
                 this.active = false; 
                 return; 
@@ -491,20 +514,16 @@ function drawFixedUnitPanel() {
 function gameLoop() {
     ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     
-    // ★ [핵심 해결 로직] 찌그러짐 방지를 위해 배경 비율을 강제로 화면에 맞게 재계산!
     if (bgImage && bgImage.complete && bgImage.naturalWidth !== 0) {
         const imgRatio = bgImage.width / bgImage.height; 
         const canvasRatio = logicalWidth / logicalHeight; 
         let drawW, drawH, drawX, drawY;
         if (imgRatio > canvasRatio) { 
-            drawH = logicalHeight; 
-            drawW = logicalHeight * imgRatio; 
+            drawH = logicalHeight; drawW = logicalHeight * imgRatio; 
         } else { 
-            drawW = logicalWidth; 
-            drawH = logicalWidth / imgRatio; 
+            drawW = logicalWidth; drawH = logicalWidth / imgRatio; 
         }
-        drawX = (logicalWidth - drawW) / 2; 
-        drawY = (logicalHeight - drawH) / 2; 
+        drawX = (logicalWidth - drawW) / 2; drawY = (logicalHeight - drawH) / 2; 
         ctx.drawImage(bgImage, drawX, drawY, drawW, drawH);
         
         const startX = centerX - (GRID_COLS * TILE_SIZE) / 2; const startY = centerY - (GRID_ROWS * TILE_SIZE) / 2;
