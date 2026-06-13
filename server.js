@@ -22,7 +22,7 @@ const STAGE_DB = {
     1: { maxWave: 20, hpMultiplier: 2.0 },
     2: { maxWave: 20, hpMultiplier: 6.0 },
     3: { maxWave: 20, hpMultiplier: 16.0 },
-    4: { maxWave: 20, hpMultiplier: 30.0 }
+    4: { maxWave: 20, hpMultiplier: 35.0 } // 밸런스 조정 반영
 };
 
 function getValidSpawnPos(room, side) {
@@ -46,7 +46,8 @@ setInterval(() => {
             
             if (room.countdown > 0) {
                 room.countdown--;
-                io.to(roomCode).emit('game_state', { countdown: room.countdown, monsters: room.monsters, units: room.units, projectiles: room.projectiles, nexusHp: room.nexusHp, players: room.players, currentWave: room.currentWave, maxWave: STAGE_DB[room.stage].maxWave });
+                // ★ 클라이언트에 현재 방의 stage 정보도 같이 넘겨줌
+                io.to(roomCode).emit('game_state', { countdown: room.countdown, monsters: room.monsters, units: room.units, projectiles: room.projectiles, nexusHp: room.nexusHp, players: room.players, currentWave: room.currentWave, maxWave: STAGE_DB[room.stage].maxWave, stage: room.stage });
                 continue;
             }
 
@@ -199,15 +200,22 @@ setInterval(() => {
                 io.to(roomCode).emit('game_clear', { stage: room.stage });
             }
 
-            io.to(roomCode).emit('game_state', { countdown: room.countdown, monsters: room.monsters, units: room.units, projectiles: room.projectiles, nexusHp: room.nexusHp, players: room.players, currentWave: room.currentWave, maxWave: STAGE_DB[room.stage].maxWave });
+            io.to(roomCode).emit('game_state', { countdown: room.countdown, monsters: room.monsters, units: room.units, projectiles: room.projectiles, nexusHp: room.nexusHp, players: room.players, currentWave: room.currentWave, maxWave: STAGE_DB[room.stage].maxWave, stage: room.stage });
         }
     }
 }, 1000 / 60);
 
 io.on('connection', (socket) => {
     socket.on('join_room', (data) => {
-        let roomCode = data.roomCode; let profile = data.profile; 
-        if (!rooms[roomCode]) rooms[roomCode] = { players: [], monsters: [], units: [], projectiles: [], frameCount: 0, countdown: 300, currentWave: 1, stage: 1, nexusHp: 200, isGameOver: false, stats: { kills: 0, wave: 1, goldEarned: 0 } };
+        let roomCode = data.roomCode; 
+        let profile = data.profile; 
+        let reqStage = data.stage || 1; // ★ 유저가 선택한 스테이지 받아옴
+
+        // ★ 첫 번째 유저(방장)가 방을 팔 때 스테이지가 고정됨!
+        if (!rooms[roomCode]) {
+            rooms[roomCode] = { players: [], monsters: [], units: [], projectiles: [], frameCount: 0, countdown: 300, currentWave: 1, stage: reqStage, nexusHp: 200, isGameOver: false, stats: { kills: 0, wave: 1, goldEarned: 0 } };
+        }
+        
         let room = rooms[roomCode];
 
         if (room.players.some(p => p.id === socket.id)) return;
@@ -234,7 +242,6 @@ io.on('connection', (socket) => {
                 me.gold -= 100;
                 let randomUnitId = baseUnits[Math.floor(Math.random() * baseUnits.length)];
                 
-                // ★ 좌표 교정 (40 삐져나감 방지)
                 let spawnX = pos.col * 80 + 40; 
                 let spawnY = 270 + pos.row * 80 + 40; 
                 

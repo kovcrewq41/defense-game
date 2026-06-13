@@ -36,7 +36,7 @@ resizeCanvas();
 ctx.scale(dpr, dpr);
 
 const centerX = logicalWidth / 2;
-const centerY = 550; // ★ 이 좌표가 없어서 멈췄던 겁니다! 부활 완료!
+const centerY = 550;
 
 const socket = io("https://defense-game-ilbv.onrender.com");
 
@@ -52,6 +52,7 @@ let frameCount = 0;
 let countdown = 0;
 let currentWave = 1;
 let maxWave = 20;
+let currentMultiStage = 1; // 동기화된 스테이지 변수
 let isSynergyOpen = true;
 let activeSynergies = { SWORD: 0, ARCHER: 0, MAGE: 0, SHIELD: 0, ASSASSIN: 0, CANNON: 0, PRIEST: 0 };
 
@@ -63,6 +64,14 @@ let draggingItem = null;
 const TILE_SIZE = 80;
 const START_X = 0; 
 const START_Y = 270; 
+
+// ★ 화면에 보여줄 스테이지 정보 DB
+const STAGE_DB = {
+    1: { name: "1. 평화로운 초원 (Easy)", maxWave: 20 },
+    2: { name: "2. 고블린 둥지 (Normal)", maxWave: 20 },
+    3: { name: "3. 붉은 화산 (Hard)", maxWave: 20 },
+    4: { name: "4. 메마른 사막 (Extreme)", maxWave: 20 }
+};
 
 const ITEM_DB = {
     "SWORD": { name: "B.F대검", color: "#ff5252", symbol: "⚔️", type: "dmg", value: 1.2 },
@@ -85,8 +94,10 @@ class UIButton {
 }
 
 const gameButtons = [
-    new UIButton(40, 1090, 300, 90, "🎲 뽑기 (100G)", "#1565c0", () => { socket.emit('request_gacha'); }),
-    new UIButton(380, 1090, 300, 90, "🏃 로비로", "#c62828", () => { window.location.href = '/'; })
+    new UIButton(40, 1150, 300, 70, "🎲 뽑기 (100G)", "#1565c0", () => { socket.emit('request_gacha'); }),
+    new UIButton(380, 1150, 300, 70, "🏃 로비로", "#c62828", () => { 
+        if (confirm("정말 게임을 포기하고 로비로 돌아가시겠습니까?")) window.location.href = '/'; 
+    })
 ];
 
 function loadGame() {
@@ -104,36 +115,85 @@ function loadGame() {
 }
 loadGame(); 
 
+// =========================================================================
+// ★ [혁신 UX] 멀티플레이 전용 로드맵 & 난이도 선택 UI 동적 생성
+// =========================================================================
 const lobby = document.getElementById('lobby');
-const gameContainer = document.getElementById('gameContainer');
-const roomInput = document.getElementById('roomInput');
-const joinBtn = document.getElementById('joinBtn');
-const statusMsg = document.getElementById('statusMsg');
+lobby.innerHTML = ''; // 기존 허접한 HTML 싹 지우기
+lobby.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:'Malgun Gothic', sans-serif; overflow-y:auto;";
 
-const backBtn = document.createElement('button');
-backBtn.innerText = "🏃 메인화면(싱글)으로 돌아가기";
-backBtn.style.cssText = "display:block; width:100%; padding:15px; margin-top:20px; font-size:18px; font-weight:bold; background-color:#c62828; color:white; border:none; border-radius:10px; cursor:pointer;";
-backBtn.onclick = () => window.location.href = '/';
-lobby.appendChild(backBtn);
+let selectedMultiStage = 1; // 기본 선택 난이도
 
-joinBtn.addEventListener('click', () => {
-    if (roomInput.value.trim()) {
-        joinBtn.disabled = true;
-        socket.emit('join_room', { roomCode: roomInput.value.trim(), profile: PlayerProfile });
-        statusMsg.textContent = "방 입장 완료! 다른 플레이어를 기다리는 중...";
-        joinBtn.style.display = "none"; roomInput.style.display = "none";
-        backBtn.style.display = "none";
+lobby.innerHTML = `
+    <div style="max-width:500px; width:90%; display:flex; flex-direction:column; align-items:center; padding:20px 0;">
+        <h1 style="color:#ffdd57; margin:0 0 10px 0; font-size:32px;">🗺️ 멀티 협동 로드맵</h1>
+        <p style="color:#aaa; text-align:center; font-size:16px; margin-bottom:20px; line-height:1.4;">
+            원하는 난이도를 고르고 방 코드를 치세요.<br>
+            <span style="color:#ff9800; font-size:14px;">(방을 처음 개설한 방장의 난이도로 자동 맞춰집니다)</span>
+        </p>
+
+        <div style="display:flex; flex-direction:column; gap:12px; width:100%; margin-bottom:30px;">
+            <button class="stage-btn" data-stage="1" style="background:#2e7d32; color:white; padding:15px; border-radius:10px; border:3px solid #ffdd57; cursor:pointer; text-align:left;">
+                <div style="font-size:22px; font-weight:bold;">1. 평화로운 초원 (Easy)</div>
+                <div style="font-size:14px; color:#ddd; margin-top:5px;">💡 초보자 연습용 / 💎 보상: 100개</div>
+            </button>
+            <button class="stage-btn" data-stage="2" style="background:#1565c0; color:white; padding:15px; border-radius:10px; border:3px solid transparent; cursor:pointer; text-align:left;">
+                <div style="font-size:22px; font-weight:bold;">2. 고블린 둥지 (Normal)</div>
+                <div style="font-size:14px; color:#ddd; margin-top:5px;">💡 올마스터리 3렙 이상 / 💎 보상: 300개</div>
+            </button>
+            <button class="stage-btn" data-stage="3" style="background:#e65100; color:white; padding:15px; border-radius:10px; border:3px solid transparent; cursor:pointer; text-align:left;">
+                <div style="font-size:22px; font-weight:bold;">3. 붉은 화산 (Hard)</div>
+                <div style="font-size:14px; color:#ddd; margin-top:5px;">💡 패시브 풀업 권장 / 💎 보상: 800개</div>
+            </button>
+            <button class="stage-btn" data-stage="4" style="background:#4a148c; color:white; padding:15px; border-radius:10px; border:3px solid transparent; cursor:pointer; text-align:left;">
+                <div style="font-size:22px; font-weight:bold;">4. 메마른 사막 (Extreme)</div>
+                <div style="font-size:14px; color:#ddd; margin-top:5px;">💀 고인물 전용 (지옥) / 💎 보상: 2000개</div>
+            </button>
+        </div>
+
+        <div style="display:flex; width:100%; gap:10px;">
+            <input type="text" id="newRoomInput" placeholder="방 코드 입력" style="flex:1; padding:18px; font-size:20px; border-radius:10px; border:none; text-align:center; font-weight:bold;">
+            <button id="newJoinBtn" style="padding:15px 30px; font-size:20px; background:#c62828; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">입장</button>
+        </div>
+        
+        <p id="newStatusMsg" style="margin-top:20px; color:#ffdd57; font-weight:bold; font-size:18px;"></p>
+        
+        <button id="goBackBtn" style="margin-top:20px; background:none; color:#888; text-decoration:underline; border:none; cursor:pointer; font-size:16px;">◀ 싱글플레이로 도망가기</button>
+    </div>
+`;
+
+// 버튼 클릭 시 테두리 애니메이션 처리 및 난이도 저장
+document.querySelectorAll('.stage-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.stage-btn').forEach(b => b.style.border = '3px solid transparent');
+        e.currentTarget.style.border = '3px solid #ffdd57';
+        selectedMultiStage = parseInt(e.currentTarget.getAttribute('data-stage'));
+    });
+});
+
+document.getElementById('goBackBtn').addEventListener('click', () => window.location.href = '/');
+
+document.getElementById('newJoinBtn').addEventListener('click', () => {
+    const codeInput = document.getElementById('newRoomInput').value.trim();
+    if (codeInput) {
+        document.getElementById('newJoinBtn').disabled = true;
+        // ★ 소켓 통신으로 내가 선택한 난이도(stage)를 서버에 던집니다!
+        socket.emit('join_room', { roomCode: codeInput, profile: PlayerProfile, stage: selectedMultiStage });
+        document.getElementById('newStatusMsg').textContent = "방 접속 중... 친구를 기다리세요!";
     }
 });
 
+// =========================================================================
+
 socket.on('assign_side', (side) => { mySide = side; });
-socket.on('game_start', () => { lobby.style.display = 'none'; gameContainer.style.display = 'block'; isGameStarted = true; drawGameScreen(); });
+socket.on('game_start', () => { lobby.style.display = 'none'; document.getElementById('gameContainer').style.display = 'block'; isGameStarted = true; drawGameScreen(); });
 
 socket.on('game_state', (data) => {
     if (!isGameStarted) return;
     if (data.countdown !== undefined) countdown = data.countdown;
     if (data.currentWave !== undefined) currentWave = data.currentWave;
     if (data.maxWave !== undefined) maxWave = data.maxWave;
+    if (data.stage !== undefined) currentMultiStage = data.stage; // ★ 서버에서 동기화된 스테이지 갱신
     if (data.monsters) monsters = data.monsters;
     if (data.projectiles) projectiles = data.projectiles; 
     
@@ -162,12 +222,15 @@ socket.on('game_over', (stats) => {
     document.getElementById('gameOverOverlay').style.display = 'flex';
 });
 
+// ★ 멀티플레이 스테이지 난이도에 따른 동적 보상 지급
 socket.on('game_clear', (data) => {
     isGameStarted = false;
-    let earnedStones = data.stage * 100;
+    const MULTI_REWARDS = { 1: 100, 2: 300, 3: 800, 4: 2000 };
+    let earnedStones = MULTI_REWARDS[data.stage] || 100;
+    
     PlayerProfile.soulStones += earnedStones;
     localStorage.setItem('defenseSaveData', JSON.stringify(PlayerProfile));
-    alert(`🎉 협동 모드 클리어! 🎉\n정산 보상: 영혼석 💎 ${earnedStones}개 획득!`);
+    alert(`🎉 협동 모드 [스테이지 ${data.stage}] 클리어! 🎉\n정산 보상: 영혼석 💎 ${earnedStones}개 획득!`);
     window.location.href = '/'; 
 });
 
@@ -204,7 +267,7 @@ function handleDown(e) {
     if (pos.x >= 10 && pos.x <= 90 && pos.y >= 100 && pos.y <= 130) { isSynergyOpen = !isSynergyOpen; return; }
 
     for (let i = 0; i < 5; i++) {
-        let ix = 135 + i * 90; let iy = 995;
+        let ix = 135 + i * 90; let iy = 1040;
         if (pos.x >= ix && pos.x <= ix + 70 && pos.y >= iy && pos.y <= iy + 70) {
             if (myInventory[i]) { draggingItem = { index: i, id: myInventory[i], x: pos.x, y: pos.y }; selectedUnit = null; return; }
         }
@@ -278,7 +341,8 @@ function drawUI() {
     ctx.fillStyle = "#ffdd57"; ctx.font = "bold 28px Malgun Gothic"; ctx.textAlign = "center";
     ctx.fillText(`보유 골드: ${myGold} G`, centerX, 80);
     ctx.fillStyle = "#fff"; ctx.font = "bold 22px Malgun Gothic";
-    ctx.fillText(`멀티 협동 모드 - 웨이브 ${currentWave} / ${maxWave}`, centerX, 40);
+    // ★ 동기화된 난이도 이름 출력
+    ctx.fillText(`[협동] ${STAGE_DB[currentMultiStage].name} - 웨이브 ${currentWave} / ${maxWave}`, centerX, 40);
 
     ctx.fillStyle = "rgba(255, 255, 255, 0.2)"; ctx.fillRect(10, 100, 80, 30);
     ctx.fillStyle = "#fff"; ctx.font = "bold 14px Malgun Gothic"; ctx.textAlign = "center";
@@ -444,33 +508,29 @@ function drawGameScreen() {
         });
     }
 
-    ctx.fillStyle = "rgba(75, 0, 130, 0.95)"; ctx.fillRect(0, 950, logicalWidth, 70);
-    ctx.fillStyle = (nexusHp > 50) ? "white" : "red"; ctx.font = "bold 30px Arial"; ctx.textAlign = "center";
-    ctx.fillText(`🛡️ NEXUS HP: ${nexusHp}`, centerX, 995);
+    ctx.fillStyle = "rgba(75, 0, 130, 0.95)"; ctx.fillRect(0, 950, logicalWidth, 50);
+    ctx.fillStyle = (nexusHp > 50) ? "white" : "red"; ctx.font = "bold 26px Arial"; ctx.textAlign = "center";
+    ctx.fillText(`🛡️ NEXUS HP: ${nexusHp}`, centerX, 983);
 
-    ctx.fillStyle = "#222"; ctx.fillRect(0, 1020, logicalWidth, 260); 
+    ctx.fillStyle = "#222"; ctx.fillRect(0, 1000, logicalWidth, 280); 
     ctx.fillStyle = "#aaa"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; 
-    ctx.fillText("📦 내 아이템 보관함", centerX, 1055);
+    ctx.fillText("📦 내 아이템 보관함", centerX, 1025);
     
     for (let i = 0; i < 5; i++) { 
-        let ix = 135 + i * 90; let iy = 995; 
-        ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); 
-        ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); 
+        let ix = 135 + i * 90; let iy = 1040; 
+        ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); 
         if (myInventory[i] && (!draggingItem || draggingItem.index !== i)) { 
             let item = ITEM_DB[myInventory[i]]; 
             ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); 
             ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); 
         } 
     }
-
     if (draggingItem) { 
-        let item = ITEM_DB[draggingItem.id]; 
-        ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); 
-        ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); 
+        let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); 
     }
-
-    drawFixedUnitPanel(); 
-    gameButtons.forEach(btn => btn.draw());
+    
+    drawFixedUnitPanel();
+    gameButtons.forEach(btn => btn.draw()); 
 
     requestAnimationFrame(drawGameScreen);
 }

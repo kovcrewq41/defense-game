@@ -8,7 +8,6 @@ const dpr = window.devicePixelRatio || 1;
 canvas.width = logicalWidth * dpr;
 canvas.height = logicalHeight * dpr;
 
-// ★ 싱글플레이도 비율 자동 축소(Letterbox) 완벽 적용
 document.body.style.margin = "0";
 document.body.style.overflow = "hidden";
 document.body.style.backgroundColor = "#000";
@@ -167,7 +166,7 @@ class Projectile {
         if (distance < 15) {
             if (this.target.isBase) { 
                 baseHp += this.baseDamage; 
-                if (baseHp > 100) baseHp = 100;
+                if (baseHp > 100) baseHp = 100; 
                 Sound.heal(); 
                 this.active = false; 
                 return; 
@@ -356,8 +355,9 @@ function updateDexButtonsText() {
 }
 updatePassiveButtonsText(); updateDexButtonsText();
 
+// ★ 수정: 버튼 높이를 70으로 줄이고, 위치를 아래로 살짝 내림 + 포기 확인창 추가
 const gameButtons = [
-    new UIButton(40, 1090, 300, 90, "🎲 뽑기 (100G)", "#1565c0", () => {
+    new UIButton(40, 1150, 300, 70, "🎲 뽑기 (100G)", "#1565c0", () => {
         if (PlayerProfile.gold >= 100) {
             const tilePos = getValidSpawnPos(); if (tilePos === null) { alert("빈 칸이 없습니다!"); return; }
             PlayerProfile.gold -= 100;
@@ -368,7 +368,9 @@ const gameButtons = [
             units.push(new Unit(spawnUnitId, tilePos.col, tilePos.row));
         }
     }),
-    new UIButton(380, 1090, 300, 90, "🏃 포기", "#c62828", () => { currentScene = 'MAIN_MENU'; })
+    new UIButton(380, 1150, 300, 70, "🏃 포기", "#c62828", () => { 
+        if(confirm("정말 게임을 포기하고 메인 메뉴로 돌아가시겠습니까?")) { currentScene = 'MAIN_MENU'; } 
+    })
 ];
 
 function getPointerPos(event) { 
@@ -416,7 +418,8 @@ function handleDown(event) {
     if (btnClicked) return;
 
     if (currentScene === 'GAME') {
-        for (let i = 0; i < 5; i++) { let ix = 145 + i * 90; let iy = 995; if (pos.x >= ix && pos.x <= ix + 70 && pos.y >= iy && pos.y <= iy + 70) { if (inventory[i]) { draggingItem = { index: i, id: inventory[i], x: pos.x, y: pos.y }; selectedUnit = null; return; } } }
+        // ★ 수정: 아이템 클릭 좌표 1040으로 갱신
+        for (let i = 0; i < 5; i++) { let ix = 135 + i * 90; let iy = 1040; if (pos.x >= ix && pos.x <= ix + 70 && pos.y >= iy && pos.y <= iy + 70) { if (inventory[i]) { draggingItem = { index: i, id: inventory[i], x: pos.x, y: pos.y }; selectedUnit = null; return; } } }
         let hitUnit = null; for (let i = units.length - 1; i >= 0; i--) if (units[i].isHit(pos.x, pos.y)) { hitUnit = units[i]; break; }
         if (hitUnit) { draggingUnit = hitUnit; selectedUnit = hitUnit; draggingUnit.origGridX = hitUnit.gridX; draggingUnit.origGridY = hitUnit.gridY; } else { selectedUnit = null; }
     }
@@ -597,9 +600,23 @@ function gameLoop() {
             for (let i = goldParticles.length - 1; i >= 0; i--) { let p = goldParticles[i]; if (!p.update()) goldParticles.splice(i, 1); else p.draw(); }
         }
         
-        ctx.fillStyle = "#222"; ctx.fillRect(0, 950, logicalWidth, 330); ctx.fillStyle = "#444"; ctx.fillRect(0, 950, logicalWidth, 10); ctx.fillStyle = "#aaa"; ctx.font = "20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("보스를 잡아 획득한 아이템을 유닛에게 드래그하세요!", centerX, 980);
-        for (let i = 0; i < 5; i++) { let ix = 145 + i * 90; let iy = 995; ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); if (inventory[i] && (!draggingItem || draggingItem.index !== i)) { let item = ITEM_DB[inventory[i]]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); } }
-        if (draggingItem) { let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); }
+        // ★ 수정: 하단 배경 및 아이템 칸 위치 조정 (버튼과 간섭 없게)
+        ctx.fillStyle = "#222"; ctx.fillRect(0, 1000, logicalWidth, 280); 
+        ctx.fillStyle = "#aaa"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; 
+        ctx.fillText("📦 내 아이템 보관함", centerX, 1030);
+        
+        for (let i = 0; i < 5; i++) { 
+            let ix = 135 + i * 90; let iy = 1050; 
+            ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); 
+            if (inventory[i] && (!draggingItem || draggingItem.index !== i)) { 
+                let item = ITEM_DB[inventory[i]]; 
+                ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); 
+                ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); 
+            } 
+        }
+        if (draggingItem) { 
+            let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); 
+        }
         
         drawUI();
         drawFixedUnitPanel();
