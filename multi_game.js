@@ -2,7 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const centerX = canvas.width / 2;
 
-const socket = io(); 
+const socket = io("https://defense-game-ilbv.onrender.com");
 let mySide = ""; 
 let myGold = 0;
 let myInventory = []; 
