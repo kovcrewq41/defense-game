@@ -32,16 +32,15 @@ const centerY = 550;
 let screenShake = 0;
 let currentScene = 'MAIN_MENU';
 let units = []; let selectedUnit = null; let draggingUnit = null; let monsters = []; let projectiles = []; 
-let baseHp = 10; // ★ 하드코어 넥서스 체력 10 고정
+let baseHp = 10; 
 let frameCount = 0; let goldParticles = []; let inventory = []; let draggingItem = null;
 
-// ★ 웨이브 시스템 변수
 let waveState = 'SPAWNING'; 
 let monstersSpawnedThisWave = 0; 
 let waveCountdownTimer = 0; 
 
 let activeSynergies = { SWORD: 0, ARCHER: 0, MAGE: 0, SHIELD: 0, ASSASSIN: 0, CANNON: 0, GUNNER: 0 };
-let sessionStats = { kills: 0, maxWave: 0, goldEarned: 0 };
+let sessionStats = { kills: 0, maxWave: 0, goldEarned: 0, earnedStones: 0, isClear: false };
 
 let bgImage = new Image(); bgImage.src = 'bg_1.png';
 let gachaState = "IDLE"; let gachaTimer = 0; let currentPull = null; let gachaParticles = [];
@@ -85,8 +84,16 @@ class Projectile {
         if (distance < 15) {
             let finalDamage = this.baseDamage;
             if ((this.effect === "slow" || this.effect === "deep_slow") && this.target.type === "FIRE") finalDamage = Math.floor(finalDamage * 1.5);
+            
+            // ★ 방패병 기절 너프 (기본 슬로우 + 아주 낮은 확률 스턴)
+            if (this.effect === "stun" || this.effect === "deep_stun") {
+                this.target.speed = Math.max(this.target.speed * 0.8, 0.1); 
+                if (Math.random() < (this.effect === "deep_stun" ? 0.05 : 0.02)) this.target.stunTimer = 60;
+            } else if (this.effect === "slow" || this.effect === "deep_slow") {
+                this.target.speed = Math.max(this.target.speed * 0.85, 0.1);
+            }
+
             if (this.effect === "splash" || this.effect === "deep_splash") { let splashRadius = (this.effect === "deep_splash") ? 100 : 50; for (let m of monsters) { if (Math.hypot(m.x - this.x, m.y - this.y) < splashRadius) m.hp -= finalDamage; } } else { this.target.hp -= finalDamage; }
-            if (this.effect === "slow") this.target.speed = Math.max(0.3, this.target.speed - 0.1); else if (this.effect === "deep_slow") this.target.speed = Math.max(0.1, this.target.speed - 0.3); else if (this.effect === "stun") this.target.stunTimer = 60; else if (this.effect === "deep_stun") this.target.stunTimer = 120;
             this.active = false; 
             if (this.effect === "crit") { Sound.crit(); } else { Sound.hit(); }
         } else { this.x += (dx / distance) * this.speed; this.y += (dy / distance) * this.speed; }
@@ -108,7 +115,6 @@ class Unit {
             if (this.trait === "SHIELD" && activeSynergies.SHIELD >= 3) buffedEffect = "deep_stun";
             if (this.trait === "CANNON" && activeSynergies.CANNON >= 3) { buffedEffect = "deep_splash"; buffedDamage = Math.floor(this.damage * 1.5); }
             if (this.trait === "ASSASSIN") { let critChance = activeSynergies.ASSASSIN >= 3 ? 0.5 : 0.2; let critMult = activeSynergies.ASSASSIN >= 3 ? 3 : 2; if (Math.random() < critChance) { buffedDamage *= critMult; buffedEffect = "crit"; } }
-            // ★ 신규 총잡이 시너지: 데미지 1.3배 & 공속 30% 증가
             if (this.trait === "GUNNER" && activeSynergies.GUNNER >= 3) { buffedDamage = Math.floor(this.damage * 1.3); buffedCooldown = Math.floor(this.cooldown * 0.7); }
             
             for (let itemId of this.items) { let itemDef = ITEM_DB[itemId]; if (itemDef.type === "dmg") buffedDamage = Math.floor(buffedDamage * itemDef.value); if (itemDef.type === "spd") buffedCooldown = Math.floor(buffedCooldown * itemDef.value); if (itemDef.type === "rng") buffedRange += itemDef.value; }
@@ -142,8 +148,10 @@ class Unit {
 class Monster {
     constructor(isBoss = false, isFinalBoss = false) {
         this.isBoss = isBoss; this.isFinalBoss = isFinalBoss;
-        const angle = Math.random() * Math.PI * 2; const spawnRadius = 480;
-        this.x = centerX + Math.cos(angle) * spawnRadius; this.y = centerY + Math.sin(angle) * spawnRadius;
+        
+        // ★ 싱글몹 상단 스폰 연동 및 보스 중앙 고정
+        if (isBoss) { this.x = centerX; } else { this.x = 100 + Math.random() * 520; }
+        this.y = -30; 
         
         let baseMaxHp = isBoss ? 500 + (frameCount / 2) : 50 + (frameCount / 100); if (isFinalBoss) baseMaxHp *= 2;
         this.speed = isBoss ? 0.3 : 0.8; this.radius = isBoss ? 30 : 15; this.mutantType = "NORMAL";
@@ -152,7 +160,12 @@ class Monster {
         const stageMulti = STAGE_DB[selectedStage].hpMultiplier; 
         this.maxHp = baseMaxHp * stageMulti; this.hp = this.maxHp; this.stunTimer = 0; this.type = (Math.random() < 0.3) ? "FIRE" : "NORMAL";
     }
-    update() { if (this.stunTimer > 0) { this.stunTimer--; return false; } const dx = centerX - this.x; const dy = centerY - this.y; const dist = Math.sqrt(dx * dx + dy * dy); if (dist < 30) return true; this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed; return false; }
+    update() { 
+        if (this.stunTimer > 0) { this.stunTimer--; return false; } 
+        const dx = centerX - this.x; const dy = centerY - this.y; const dist = Math.sqrt(dx * dx + dy * dy); 
+        if (dist < 30) return true; 
+        this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed; return false; 
+    }
     draw() {
         if (this.stunTimer > 0) { ctx.fillStyle = "#9e9e9e"; } else if (this.type === "FIRE") { ctx.fillStyle = "#ff5722"; } else if (this.mutantType === "FAST") { ctx.fillStyle = "#00bcd4"; } else if (this.mutantType === "TANK") { ctx.fillStyle = "#795548"; } else { ctx.fillStyle = "#d32f2f"; }
         ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
@@ -171,7 +184,8 @@ const menuButtons = [
     new UIButton(centerX - 175, 570, 350, 80, "전투 시작 (싱글)", "#2e7d32", () => {
         currentScene = 'GAME'; units = []; monsters = []; projectiles = []; goldParticles = []; inventory = []; draggingItem = null; 
         baseHp = 10; frameCount = 0; currentWave = 1; countdownTimer = 300; 
-        waveState = 'SPAWNING'; monstersSpawnedThisWave = 0; waveCountdownTimer = 0; // 초기화
+        waveState = 'SPAWNING'; monstersSpawnedThisWave = 0; waveCountdownTimer = 0; 
+        sessionStats = { kills: 0, maxWave: 0, goldEarned: 0, earnedStones: 0, isClear: false };
         bgImage.src = 'bg_' + selectedStage + '.png';
         PlayerProfile.gold = 500 + (PlayerProfile.passives.startGoldLvl * 50); calculateSynergies();
         const r4Lvl = PlayerProfile.relics["R4"] || 0; for (let i = 0; i < r4Lvl; i++) { const pos = getValidSpawnPos(); if (pos) { const arr = ["SWORD_3A", "ARCHER_3A", "MAGE_3A", "SHIELD_3A", "ASSASSIN_3A", "CANNON_3A", "GUNNER_3A"]; units.push(new Unit(arr[Math.floor(Math.random() * arr.length)], pos.col, pos.row)); } }
@@ -183,7 +197,10 @@ const menuButtons = [
     new UIButton(centerX - 120, 1100, 240, 50, "데이터 초기화", "#8e0000", () => { if (confirm("초기화하시겠습니까?")) { localStorage.removeItem('defenseSaveData'); location.reload(); } })
 ];
 function updateStageText() { menuButtons[1].text = STAGE_DB[selectedStage].name; } updateStageText();
+
+// ★ 게임오버/클리어 통합 화면 UI 및 버튼
 const gameOverButtons = [ new UIButton(centerX - 150, 750, 300, 80, "로비로 돌아가기", "#c62828", () => { currentScene = 'MAIN_MENU'; }) ];
+
 const relicButtons = [ new UIButton(centerX - 150, 950, 300, 80, "✨ 1회 뽑기 (100💎)", "#6a1b9a", () => { if (gachaState !== "IDLE") return; if (PlayerProfile.soulStones >= 100) { PlayerProfile.soulStones -= 100; const rand = Math.random() * 1000; let sum = 0; for (let key in RELIC_DB) { sum += RELIC_DB[key].weight; if (rand <= sum) { currentPull = key; break; } } PlayerProfile.relics[currentPull] = (PlayerProfile.relics[currentPull] || 0) + 1; saveGame(); gachaState = "SPINNING"; gachaTimer = 90; Sound.drumroll(); } else { alert("영혼석이 부족합니다!"); } }), new UIButton(centerX - 150, 1080, 300, 80, "뒤로 가기", "#c62828", () => { if (gachaState === "IDLE") currentScene = 'MAIN_MENU'; }) ];
 const passiveButtons = [ new UIButton(centerX - 200, 340, 400, 80, "", "#37474f", () => { let cost = 100 + PlayerProfile.passives.startGoldLvl * 50; if (PlayerProfile.soulStones >= cost) { PlayerProfile.soulStones -= cost; PlayerProfile.passives.startGoldLvl++; updatePassiveButtonsText(); saveGame(); } }), new UIButton(centerX - 200, 540, 400, 80, "", "#37474f", () => { let cost = 150 + PlayerProfile.passives.attackBoostLvl * 100; if (PlayerProfile.soulStones >= cost) { PlayerProfile.soulStones -= cost; PlayerProfile.passives.attackBoostLvl++; updatePassiveButtonsText(); saveGame(); } }), new UIButton(centerX - 150, 1100, 300, 80, "뒤로 가기", "#c62828", () => { currentScene = 'MAIN_MENU'; }) ];
 function updatePassiveButtonsText() { passiveButtons[0].text = `💰 골드 증가 Lv.${PlayerProfile.passives.startGoldLvl} (${100 + PlayerProfile.passives.startGoldLvl * 50}💎)`; passiveButtons[1].text = `⚔️ 공격력 강화 Lv.${PlayerProfile.passives.attackBoostLvl} (${150 + PlayerProfile.passives.attackBoostLvl * 100}💎)`; }
@@ -191,12 +208,21 @@ const dexButtons = [ new UIButton(centerX - 330, 220, 280, 60, "", "#4e342e", ()
 function updateDexButtonsText() { dexButtons[0].text = `검사 Lv.${PlayerProfile.mastery.SWORD} (${50 + PlayerProfile.mastery.SWORD * 50}💎)`; dexButtons[1].text = `궁수 Lv.${PlayerProfile.mastery.ARCHER} (${50 + PlayerProfile.mastery.ARCHER * 50}💎)`; dexButtons[2].text = `법사 Lv.${PlayerProfile.mastery.MAGE} (${50 + PlayerProfile.mastery.MAGE * 50}💎)`; dexButtons[3].text = `방패 Lv.${PlayerProfile.mastery.SHIELD} (${50 + PlayerProfile.mastery.SHIELD * 50}💎)`; dexButtons[4].text = `도적 Lv.${PlayerProfile.mastery.ASSASSIN} (${50 + PlayerProfile.mastery.ASSASSIN * 50}💎)`; dexButtons[5].text = `포병 Lv.${PlayerProfile.mastery.CANNON} (${50 + PlayerProfile.mastery.CANNON * 50}💎)`; dexButtons[6].text = `총잡이 Lv.${PlayerProfile.mastery.GUNNER} (${50 + PlayerProfile.mastery.GUNNER * 50}💎)`; } updatePassiveButtonsText(); updateDexButtonsText();
 
 const gameButtons = [
-    new UIButton(40, 1090, 300, 90, "🎲 뽑기 (100G)", "#1565c0", () => { if (PlayerProfile.gold >= 100) { const tilePos = getValidSpawnPos(); if (tilePos === null) { alert("빈 칸이 없습니다!"); return; } PlayerProfile.gold -= 100; const baseUnits = ["SWORD_1", "ARCHER_1", "MAGE_1", "SHIELD_1", "ASSASSIN_1", "CANNON_1", "GUNNER_1"]; const rareUnits = ["SWORD_2", "ARCHER_2", "MAGE_2", "SHIELD_2", "ASSASSIN_2", "CANNON_2", "GUNNER_2"]; const classIndex = Math.floor(Math.random() * 7); const spawnUnitId = (Math.random() < 0.10) ? rareUnits[classIndex] : baseUnits[classIndex]; units.push(new Unit(spawnUnitId, tilePos.col, tilePos.row)); } }),
-    new UIButton(380, 1090, 300, 90, "🏃 포기", "#c62828", () => { currentScene = 'MAIN_MENU'; })
+    new UIButton(40, 1150, 300, 70, "🎲 뽑기 (100G)", "#1565c0", () => { if (PlayerProfile.gold >= 100) { const tilePos = getValidSpawnPos(); if (tilePos === null) { alert("빈 칸이 없습니다!"); return; } PlayerProfile.gold -= 100; const baseUnits = ["SWORD_1", "ARCHER_1", "MAGE_1", "SHIELD_1", "ASSASSIN_1", "CANNON_1", "GUNNER_1"]; const rareUnits = ["SWORD_2", "ARCHER_2", "MAGE_2", "SHIELD_2", "ASSASSIN_2", "CANNON_2", "GUNNER_2"]; const classIndex = Math.floor(Math.random() * 7); const spawnUnitId = (Math.random() < 0.10) ? rareUnits[classIndex] : baseUnits[classIndex]; units.push(new Unit(spawnUnitId, tilePos.col, tilePos.row)); } }),
+    new UIButton(380, 1150, 300, 70, "🏃 포기", "#c62828", () => { if(confirm("정말 게임을 포기하고 메인 메뉴로 돌아가시겠습니까?")) { currentScene = 'MAIN_MENU'; } })
 ];
 
 function getPointerPos(event) { const rect = canvas.getBoundingClientRect(); const clientX = event.touches ? event.touches[0].clientX : event.clientX; const clientY = event.touches ? event.touches[0].clientY : event.clientY; return { x: (clientX - rect.left) * (logicalWidth / rect.width), y: (clientY - rect.top) * (logicalHeight / rect.height) }; }
-function handleDown(event) { if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); } const pos = getPointerPos(event); let btnClicked = false; let buttonsToCheck = []; if (currentScene === 'GAME') { if (pos.x >= 10 && pos.x <= 90 && pos.y >= 100 && pos.y <= 130) { isSynergyOpen = !isSynergyOpen; return; } if (selectedUnit && draggingUnit === null) { if (pos.y >= 840 && pos.y <= 940) { if (pos.x >= 590 && pos.x <= 690) { Sound.click(); PlayerProfile.gold += selectedUnit.sellPrice; units = units.filter(u => u !== selectedUnit); selectedUnit = null; return; } if (Array.isArray(selectedUnit.next)) { if (pos.x >= 450 && pos.x <= 580) { if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next[1]); selectedUnit = null; } return; } if (pos.x >= 310 && pos.x <= 440) { if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next[0]); selectedUnit = null; } return; } } else if (selectedUnit.next) { if (pos.x >= 450 && pos.x <= 580) { if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next); selectedUnit = null; } return; } } if (pos.x >= 10 && pos.x <= 710) return; } } } if (currentScene === 'MAIN_MENU') buttonsToCheck = menuButtons; else if (currentScene === 'PASSIVE_TREE') buttonsToCheck = passiveButtons; else if (currentScene === 'DEX') buttonsToCheck = dexButtons; else if (currentScene === 'RELIQUARY') buttonsToCheck = relicButtons; else if (currentScene === 'GAME') buttonsToCheck = gameButtons; else if (currentScene === 'GAME_OVER') buttonsToCheck = gameOverButtons; buttonsToCheck.forEach(b => { if (b.isClicked(pos.x, pos.y)) { if (b.text && !b.text.includes("초원") && !b.text.includes("둥지") && !b.text.includes("지옥")) { Sound.click(); } b.onClick(); btnClicked = true; } }); if (btnClicked) return; if (currentScene === 'GAME') { for (let i = 0; i < 5; i++) { let ix = 145 + i * 90; let iy = 995; if (pos.x >= ix && pos.x <= ix + 70 && pos.y >= iy && pos.y <= iy + 70) { if (inventory[i]) { draggingItem = { index: i, id: inventory[i], x: pos.x, y: pos.y }; selectedUnit = null; return; } } } let hitUnit = null; for (let i = units.length - 1; i >= 0; i--) if (units[i].isHit(pos.x, pos.y)) { hitUnit = units[i]; break; } if (hitUnit) { draggingUnit = hitUnit; selectedUnit = hitUnit; draggingUnit.origGridX = hitUnit.gridX; draggingUnit.origGridY = hitUnit.gridY; } else { selectedUnit = null; } } }
+function handleDown(event) { 
+    if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); } const pos = getPointerPos(event); let btnClicked = false; let buttonsToCheck = []; 
+    
+    // ★ 게임오버 시 화면 터치 처리
+    if (currentScene === 'GAME_OVER') {
+        gameOverButtons.forEach(b => { if (b.isClicked(pos.x, pos.y)) { Sound.click(); b.onClick(); } });
+        return;
+    }
+
+    if (currentScene === 'GAME') { if (pos.x >= 10 && pos.x <= 90 && pos.y >= 100 && pos.y <= 130) { isSynergyOpen = !isSynergyOpen; return; } if (selectedUnit && draggingUnit === null) { if (pos.y >= 840 && pos.y <= 940) { if (pos.x >= 590 && pos.x <= 690) { Sound.click(); PlayerProfile.gold += selectedUnit.sellPrice; units = units.filter(u => u !== selectedUnit); selectedUnit = null; return; } if (Array.isArray(selectedUnit.next)) { if (pos.x >= 450 && pos.x <= 580) { if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next[1]); selectedUnit = null; } return; } if (pos.x >= 310 && pos.x <= 440) { if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next[0]); selectedUnit = null; } return; } } else if (selectedUnit.next) { if (pos.x >= 450 && pos.x <= 580) { if (PlayerProfile.gold >= selectedUnit.upgradeCost) { Sound.click(); PlayerProfile.gold -= selectedUnit.upgradeCost; selectedUnit.loadData(selectedUnit.next); selectedUnit = null; } return; } } if (pos.x >= 10 && pos.x <= 710) return; } } } if (currentScene === 'MAIN_MENU') buttonsToCheck = menuButtons; else if (currentScene === 'PASSIVE_TREE') buttonsToCheck = passiveButtons; else if (currentScene === 'DEX') buttonsToCheck = dexButtons; else if (currentScene === 'RELIQUARY') buttonsToCheck = relicButtons; else if (currentScene === 'GAME') buttonsToCheck = gameButtons; buttonsToCheck.forEach(b => { if (b.isClicked(pos.x, pos.y)) { if (b.text && !b.text.includes("초원") && !b.text.includes("둥지") && !b.text.includes("지옥")) { Sound.click(); } b.onClick(); btnClicked = true; } }); if (btnClicked) return; if (currentScene === 'GAME') { for (let i = 0; i < 5; i++) { let ix = 135 + i * 90; let iy = 1040; if (pos.x >= ix && pos.x <= ix + 70 && pos.y >= iy && pos.y <= iy + 70) { if (inventory[i]) { draggingItem = { index: i, id: inventory[i], x: pos.x, y: pos.y }; selectedUnit = null; return; } } } let hitUnit = null; for (let i = units.length - 1; i >= 0; i--) if (units[i].isHit(pos.x, pos.y)) { hitUnit = units[i]; break; } if (hitUnit) { draggingUnit = hitUnit; selectedUnit = hitUnit; draggingUnit.origGridX = hitUnit.gridX; draggingUnit.origGridY = hitUnit.gridY; } else { selectedUnit = null; } } }
 function handleMove(event) { const pos = getPointerPos(event); if (draggingItem) { draggingItem.x = pos.x; draggingItem.y = pos.y; return; } if (draggingUnit) { draggingUnit.x = pos.x; draggingUnit.y = pos.y; } }
 function handleUp(event) { if (draggingItem) { let targetUnit = null; for (let u of units) { if (u.isHit(draggingItem.x, draggingItem.y)) { targetUnit = u; break; } } if (targetUnit) { if (targetUnit.items.length < 3) { Sound.click(); targetUnit.items.push(draggingItem.id); inventory.splice(draggingItem.index, 1); } else { alert("유닛당 아이템은 최대 3개까지만 장착할 수 있습니다!"); } } draggingItem = null; return; } if (draggingUnit) { const col = Math.floor((draggingUnit.x - START_X) / TILE_SIZE); const row = Math.floor((draggingUnit.y - START_Y) / TILE_SIZE); let isInvalid = true; if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS && !(col === 3 && row === 3)) { let targetUnit = units.find(u => u !== draggingUnit && u.gridX === col && u.gridY === row); if (targetUnit) { targetUnit.gridX = draggingUnit.origGridX; targetUnit.gridY = draggingUnit.origGridY; targetUnit.updatePosition(); draggingUnit.gridX = col; draggingUnit.gridY = row; isInvalid = false; } else { draggingUnit.gridX = col; draggingUnit.gridY = row; isInvalid = false; } } if (isInvalid) { draggingUnit.gridX = draggingUnit.origGridX; draggingUnit.gridY = draggingUnit.origGridY; } else { draggingUnit.origGridX = draggingUnit.gridX; draggingUnit.origGridY = draggingUnit.gridY; } draggingUnit.updatePosition(); draggingUnit = null; } }
 canvas.addEventListener('mousedown', handleDown); canvas.addEventListener('mousemove', handleMove); canvas.addEventListener('mouseup', handleUp); canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleDown(e); }, { passive: false }); canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, { passive: false }); canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleUp(e); }, { passive: false });
@@ -211,7 +237,21 @@ function gameLoop() {
     if (screenShake > 0) { const dx = (Math.random() - 0.5) * screenShake; const dy = (Math.random() - 0.5) * screenShake; ctx.translate(dx, dy); screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
 
     if (currentScene === 'MAIN_MENU') { ctx.fillStyle = "#111"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffd700"; ctx.font = "bold 60px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("업그레이드 디펜스", centerX, 300); menuButtons.forEach(btn => btn.draw()); }
-    else if (currentScene === 'GAME_OVER') { ctx.fillStyle = "#222"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ff5252"; ctx.font = "bold 80px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("GAME OVER", centerX, 300); ctx.fillStyle = "#fff"; ctx.font = "30px Malgun Gothic"; ctx.fillText(`처치한 몬스터: ${sessionStats.kills}마리`, centerX, 450); ctx.fillText(`최고 웨이브: ${sessionStats.maxWave}`, centerX, 500); ctx.fillText(`획득한 골드: ${sessionStats.goldEarned}G`, centerX, 550); gameOverButtons.forEach(btn => btn.draw()); }
+    
+    // ★ 캔버스 UI 결과창 동기화 (영혼석 및 깔끔한 출력)
+    else if (currentScene === 'GAME_OVER') { 
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); 
+        ctx.fillStyle = sessionStats.isClear ? "#69f0ae" : "#ff5252"; ctx.font = "bold 80px Malgun Gothic"; ctx.textAlign = "center"; 
+        ctx.fillText(sessionStats.isClear ? "STAGE CLEAR" : "GAME OVER", centerX, 300); 
+        ctx.fillStyle = "#fff"; ctx.font = "30px Malgun Gothic"; 
+        ctx.fillText(`처치한 몬스터: ${sessionStats.kills}마리`, centerX, 450); 
+        ctx.fillText(`도달한 웨이브: ${sessionStats.maxWave}`, centerX, 500); 
+        ctx.fillText(`획득한 골드: ${sessionStats.goldEarned}G`, centerX, 550); 
+        ctx.fillStyle = "#ffdd57"; ctx.font = "bold 40px Malgun Gothic";
+        ctx.fillText(`획득한 영혼석: 💎 ${sessionStats.earnedStones}개`, centerX, 630);
+        gameOverButtons.forEach(btn => btn.draw()); 
+    }
+    
     else if (currentScene === 'PASSIVE_TREE') { ctx.fillStyle = "#1e272c"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("🌳 영구 패시브 성장", centerX, 120); ctx.fillStyle = "#ffd700"; ctx.font = "bold 30px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 200); passiveButtons.forEach(btn => btn.draw()); }
     else if (currentScene === 'DEX') { ctx.fillStyle = "#2e1c0c"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("📖 영웅 도감 & 마스터리", centerX, 80); ctx.fillStyle = "#ffd700"; ctx.font = "bold 26px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 130); dexButtons.forEach(btn => btn.draw()); }
     else if (currentScene === 'RELIQUARY') { ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("🔮 유물 뽑기", centerX, 80); ctx.fillStyle = "#ffd700"; ctx.font = "bold 26px Malgun Gothic"; ctx.fillText(`보유 영혼석: ${PlayerProfile.soulStones} 💎`, centerX, 130); if (gachaState === "IDLE") { relicButtons.forEach(btn => btn.draw()); let startY = 220; ctx.fillStyle = "#aaa"; ctx.font = "18px Malgun Gothic"; ctx.fillText("보유 중인 유물 현황 (최대 5종)", centerX, startY); startY += 40; for (let key in PlayerProfile.relics) { if (PlayerProfile.relics[key] > 0) { let rDef = RELIC_DB[key]; ctx.fillStyle = rDef.color; ctx.font = "bold 22px Malgun Gothic"; ctx.fillText(`[${rDef.grade}] ${rDef.name} Lv.${PlayerProfile.relics[key]}`, centerX, startY); startY += 30; } } } else if (gachaState === "SPINNING") { gachaTimer--; screenShake = 5; ctx.fillStyle = "#fff"; ctx.font = "bold 30px Malgun Gothic"; ctx.fillText("두구두구두구...", centerX, 400); if (gachaTimer <= 0) { gachaState = "RESULT"; gachaTimer = 180; const rData = RELIC_DB[currentPull]; if (rData.grade === "SS") { screenShake = 40; Sound.legendary(); } else if (rData.grade === "S" || rData.grade === "A") { screenShake = 15; Sound.epic(); } else { screenShake = 5; Sound.clear(); } for (let i = 0; i < 60; i++) gachaParticles.push(new GachaParticle(centerX, 400, rData.color)); } } else if (gachaState === "RESULT") { gachaTimer--; const rData = RELIC_DB[currentPull]; gachaParticles.forEach((p, i) => { if (!p.update()) gachaParticles.splice(i, 1); else p.draw(); }); ctx.fillStyle = rData.color; ctx.font = "bold 50px Malgun Gothic"; ctx.shadowColor = rData.color; ctx.shadowBlur = 20; ctx.fillText(`[${rData.grade}] ${rData.name}!`, centerX, 400); ctx.shadowBlur = 0; ctx.fillStyle = "#fff"; ctx.font = "24px Malgun Gothic"; ctx.fillText(rData.desc, centerX, 460); if (gachaTimer <= 0) gachaState = "IDLE"; } }
@@ -227,18 +267,13 @@ function gameLoop() {
         } else {
             frameCount++;
             
-            // ★ 신규 웨이브 시스템: 정량 스폰 -> 클리어 대기 -> 카운트다운
             if (waveState === 'SPAWNING') {
-                if (frameCount % 60 === 0) {
-                    monsters.push(new Monster(false, false));
-                    monstersSpawnedThisWave++;
-                }
-                if (monstersSpawnedThisWave >= 10) { // 웨이브당 10마리만 스폰
-                    let isFinal = (currentWave === STAGE_DB[selectedStage].maxWave);
-                    let isMidBoss = (currentWave % 5 === 0);
+                if (frameCount % 60 === 0) { monsters.push(new Monster(false, false)); monstersSpawnedThisWave++; }
+                if (monstersSpawnedThisWave >= 10) { 
+                    let isFinal = (currentWave === STAGE_DB[selectedStage].maxWave); let isMidBoss = (currentWave % 5 === 0);
                     if (isMidBoss || isFinal) {
-                        monsters.push(new Monster(true, isFinal)); // 보스 1마리 출격
-                        Sound.boss(); screenShake = Math.max(screenShake, 15);
+                        monsters.push(new Monster(true, isFinal)); // 보스 무조건 중앙 출격 연동완료
+                        Sound.boss(); screenShake = Math.max(screenShake, 30); // 웅장한 진동
                     }
                     waveState = 'WAITING_CLEAR';
                 }
@@ -247,18 +282,18 @@ function gameLoop() {
                     let waveBonusGold = currentWave * 20; PlayerProfile.gold += waveBonusGold;
                     goldParticles.push(new GoldParticle(centerX, centerY - 50, waveBonusGold, false));
                     if (currentWave >= STAGE_DB[selectedStage].maxWave) {
-                        Sound.clear(); let reward = selectedStage * 50; PlayerProfile.soulStones += reward;
+                        Sound.clear(); 
+                        sessionStats.maxWave = currentWave; sessionStats.isClear = true;
+                        sessionStats.earnedStones = selectedStage * 50; PlayerProfile.soulStones += sessionStats.earnedStones; 
                         if (PlayerProfile.unlockedStage === selectedStage && PlayerProfile.unlockedStage < Object.keys(STAGE_DB).length) PlayerProfile.unlockedStage++;
-                        saveGame(); alert(`🎉 스테이지 ${selectedStage} 클리어! 🎉\n정산 보상: 영혼석 💎 ${reward}개 획득!`); currentScene = 'MAIN_MENU';
+                        saveGame(); currentScene = 'GAME_OVER';
                     } else {
-                        waveState = 'COUNTDOWN'; waveCountdownTimer = 180; // 3초 대기
+                        waveState = 'COUNTDOWN'; waveCountdownTimer = 180; 
                     }
                 }
             } else if (waveState === 'COUNTDOWN') {
                 waveCountdownTimer--;
-                if (waveCountdownTimer <= 0) {
-                    currentWave++; monstersSpawnedThisWave = 0; waveState = 'SPAWNING';
-                }
+                if (waveCountdownTimer <= 0) { currentWave++; monstersSpawnedThisWave = 0; waveState = 'SPAWNING'; }
             }
 
             units.forEach(unit => { unit.updatePosition(); unit.update(); unit.draw(); });
@@ -266,33 +301,46 @@ function gameLoop() {
             for (let i = monsters.length - 1; i >= 0; i--) {
                 let m = monsters[i];
                 if (m.hp <= 0) {
-                    const r3Lvl = PlayerProfile.relics["R3"] || 0; const earnedGold = (m.isBoss ? 150 : 12) + (r3Lvl * 5); sessionStats.kills++; sessionStats.goldEarned += earnedGold; PlayerProfile.gold += earnedGold; goldParticles.push(new GoldParticle(m.x, m.y, earnedGold, m.isBoss)); Sound.coin(); if (m.isBoss && inventory.length < 5) { const itemKeys = Object.keys(ITEM_DB); inventory.push(itemKeys[Math.floor(Math.random() * itemKeys.length)]); }
+                    const r3Lvl = PlayerProfile.relics["R3"] || 0; const earnedGold = (m.isBoss ? 150 : 12) + (r3Lvl * 5); sessionStats.kills++; sessionStats.goldEarned += earnedGold; PlayerProfile.gold += earnedGold; goldParticles.push(new GoldParticle(m.x, m.y, earnedGold, m.isBoss)); Sound.coin(); 
+                    
+                    // ★ 싱글 아이템 드랍 확률 연동
+                    if (m.isBoss) { if (inventory.length < 5) inventory.push(Object.keys(ITEM_DB)[Math.floor(Math.random() * 3)]); } 
+                    else { if (Math.random() < 0.01 && inventory.length < 5) inventory.push(Object.keys(ITEM_DB)[Math.floor(Math.random() * 3)]); }
                     monsters.splice(i, 1); continue;
                 }
                 let reachedBase = m.update(); m.draw();
                 if (reachedBase) { 
-                    // ★ 즉사 시스템 적용
                     if (m.isBoss) { baseHp = 0; } else { baseHp -= 1; }
                     monsters.splice(i, 1); 
-                    if (baseHp <= 0) { sessionStats.maxWave = currentWave; const earnedStones = Math.floor(frameCount / 300); PlayerProfile.soulStones += earnedStones; saveGame(); alert(`기지가 파괴되었습니다!\n정산 보상: 영혼석 💎 ${earnedStones}개 획득!`); currentScene = 'GAME_OVER'; } 
+                    if (baseHp <= 0) { 
+                        sessionStats.maxWave = currentWave; sessionStats.isClear = false;
+                        sessionStats.earnedStones = Math.floor((currentWave - 1) / 5) * 50; 
+                        PlayerProfile.soulStones += sessionStats.earnedStones; 
+                        saveGame(); currentScene = 'GAME_OVER'; 
+                    } 
                 }
             }
             for (let i = goldParticles.length - 1; i >= 0; i--) { let p = goldParticles[i]; if (!p.update()) goldParticles.splice(i, 1); else p.draw(); }
-            
-            // 웨이브 대기 UI
-            if (waveState === 'COUNTDOWN') {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; ctx.fillRect(0, centerY - 60, logicalWidth, 100);
-                ctx.fillStyle = "#69f0ae"; ctx.font = "bold 40px Malgun Gothic"; ctx.textAlign = "center";
-                ctx.fillText(`다음 웨이브까지 ${Math.ceil(waveCountdownTimer / 60)}초!`, centerX, centerY + 10);
-            }
+        }
+        ctx.restore(); // 떨림 방지 복구
+
+        // ★ 넥서스 체력 위쪽으로 딜레이 카운트다운 이동
+        if (waveState === 'COUNTDOWN') {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(0, 890, logicalWidth, 60);
+            ctx.fillStyle = "#69f0ae"; ctx.font = "bold 26px Malgun Gothic"; ctx.textAlign = "center";
+            ctx.fillText(`다음 웨이브까지 ${Math.ceil(waveCountdownTimer / 60)}초! 유닛을 정비하세요!`, centerX, 930);
         }
         
-        ctx.fillStyle = "#222"; ctx.fillRect(0, 950, logicalWidth, 330); ctx.fillStyle = "#444"; ctx.fillRect(0, 950, logicalWidth, 10); ctx.fillStyle = "#aaa"; ctx.font = "20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("보스를 잡아 획득한 아이템을 유닛에게 드래그하세요!", centerX, 980);
-        for (let i = 0; i < 5; i++) { let ix = 145 + i * 90; let iy = 995; ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); if (inventory[i] && (!draggingItem || draggingItem.index !== i)) { let item = ITEM_DB[inventory[i]]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); } }
+        ctx.fillStyle = "rgba(75, 0, 130, 0.95)"; ctx.fillRect(0, 950, logicalWidth, 50);
+        ctx.fillStyle = (baseHp > 5) ? "white" : "red"; ctx.font = "bold 26px Arial"; ctx.textAlign = "center";
+        ctx.fillText(`🛡️ NEXUS HP: ${baseHp} / 10`, centerX, 983);
+    
+        ctx.fillStyle = "#222"; ctx.fillRect(0, 1000, logicalWidth, 280); ctx.fillStyle = "#aaa"; ctx.font = "bold 20px Malgun Gothic"; ctx.textAlign = "center"; ctx.fillText("📦 내 아이템 보관함", centerX, 1025);
+        for (let i = 0; i < 5; i++) { let ix = 135 + i * 90; let iy = 1040; ctx.fillStyle = "#333"; ctx.fillRect(ix, iy, 70, 70); ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.strokeRect(ix, iy, 70, 70); if (inventory[i] && (!draggingItem || draggingItem.index !== i)) { let item = ITEM_DB[inventory[i]]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(ix + 35, iy + 35, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, ix + 35, iy + 37); } }
         if (draggingItem) { let item = ITEM_DB[draggingItem.id]; ctx.fillStyle = item.color; ctx.beginPath(); ctx.arc(draggingItem.x, draggingItem.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#000"; ctx.font = "20px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(item.symbol, draggingItem.x, draggingItem.y + 2); }
         
         drawUI(); drawFixedUnitPanel(); gameButtons.forEach(btn => btn.draw()); 
     }
-    ctx.restore(); requestAnimationFrame(gameLoop);
+    requestAnimationFrame(gameLoop);
 }
 gameLoop();

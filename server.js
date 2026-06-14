@@ -53,6 +53,10 @@ setInterval(() => {
             uniqueUnits.right.forEach(type => { if(UNIT_DB[type] && UNIT_DB[type].trait) synergies.right[UNIT_DB[type].trait]++; else if(type) synergies.right[type.split('_')[0]]++; });
             
             room.units.forEach(u => {
+                // ★ 공격 애니메이션 타이머 동기화 로직
+                if (!u.attackAnimTimer) u.attackAnimTimer = 0;
+                if (u.attackAnimTimer > 0) u.attackAnimTimer--;
+
                 if (!u.timer) u.timer = 0; if (u.timer > 0) u.timer--;
                 if (u.timer <= 0) {
                     const stats = UNIT_DB[u.type]; if (!stats) return;
@@ -69,7 +73,6 @@ setInterval(() => {
                     if (trait === "SHIELD" && syn >= 3) buffedEffect = "deep_stun";
                     if (trait === "CANNON" && syn >= 3) { buffedEffect = "deep_splash"; buffedDamage = Math.floor(stats.damage * 1.5); }
                     if (trait === "ASSASSIN") { let critChance = syn >= 3 ? 0.5 : 0.2; let critMult = syn >= 3 ? 3 : 2; if (Math.random() < critChance) { buffedDamage *= critMult; buffedEffect = "crit"; } }
-                    // ★ 신규 총잡이 시너지 연동
                     if (trait === "GUNNER" && syn >= 3) { buffedDamage = Math.floor(stats.damage * 1.3); buffedCooldown = Math.floor(stats.cooldown * 0.7); }
 
                     if (u.items) { u.items.forEach(itemId => { if (ITEM_DB[itemId].type === "dmg") buffedDamage = Math.floor(buffedDamage * ITEM_DB[itemId].value); if (ITEM_DB[itemId].type === "spd") buffedCooldown = Math.floor(buffedCooldown * ITEM_DB[itemId].value); if (ITEM_DB[itemId].type === "rng") buffedRange += ITEM_DB[itemId].value; }); }
@@ -89,6 +92,7 @@ setInterval(() => {
                     if (target) {
                         room.projectiles.push({ id: Math.random().toString(36).substr(2, 9), x: u.x, y: u.y, targetId: target.id, damage: buffedDamage, effect: buffedEffect, speed: 10, side: u.side });
                         u.timer = buffedCooldown;
+                        u.attackAnimTimer = 20; // ★ 클라이언트에서 애니메이션을 재생하도록 타이머 부여
                     }
                 }
             });
@@ -102,10 +106,13 @@ setInterval(() => {
                 let dist = Math.sqrt(dx * dx + dy * dy);
 
                 if (dist <= p.speed) {
-                    if (p.effect === "slow") target.speed = Math.max(0.3, target.speed - 0.1);
-                    else if (p.effect === "deep_slow") target.speed = Math.max(0.1, target.speed - 0.3);
-                    else if (p.effect === "stun") target.stunTimer = 60;
-                    else if (p.effect === "deep_stun") target.stunTimer = 120;
+                    // ★ 방패병 기절 너프 (기본 슬로우 + 아주 낮은 확률 스턴)
+                    if (p.effect === "stun" || p.effect === "deep_stun") {
+                        target.speed = Math.max(target.speed * 0.8, 0.1); 
+                        if (Math.random() < (p.effect === "deep_stun" ? 0.05 : 0.02)) target.stunTimer = 60;
+                    } else if (p.effect === "slow" || p.effect === "deep_slow") {
+                        target.speed = Math.max(target.speed * 0.85, 0.1);
+                    }
 
                     if (p.effect === "splash" || p.effect === "deep_splash") {
                         let radius = (p.effect === "deep_splash") ? 100 : 50;
@@ -116,12 +123,21 @@ setInterval(() => {
 
                     if (target.hp <= 0 && !target.isDead) {
                         target.isDead = true; room.stats.kills++; 
-                        let owner = room.players.find(player => player.side === p.side);
-                        let bonusGold = (owner && owner.profile && owner.profile.relics["R3"]) ? owner.profile.relics["R3"] * 5 : 0;
-                        let earnedGold = (target.isBoss ? 300 : 30) + bonusGold; 
+                        
+                        // ★ 아이템 및 골드 분배
+                        room.players.forEach(p => {
+                            let bonusGold = (p.profile && p.profile.relics["R3"]) ? p.profile.relics["R3"] * 5 : 0;
+                            let earnedGold = (target.isBoss ? 300 : 30) + bonusGold; 
+                            p.gold += earnedGold;
 
-                        room.stats.goldEarned += earnedGold;
-                        if (owner) { owner.gold += earnedGold; if (target.isBoss && owner.inventory.length < 5) { const itemKeys = Object.keys(ITEM_DB); owner.inventory.push(itemKeys[Math.floor(Math.random() * itemKeys.length)]); } }
+                            // 보스는 무조건 100% 드랍, 일반몹은 1% 드랍
+                            if (target.isBoss) {
+                                if (p.inventory.length < 5) p.inventory.push(Object.keys(ITEM_DB)[Math.floor(Math.random() * 3)]);
+                            } else {
+                                if (Math.random() < 0.01 && p.inventory.length < 5) p.inventory.push(Object.keys(ITEM_DB)[Math.floor(Math.random() * 3)]);
+                            }
+                        });
+                        room.stats.goldEarned += (target.isBoss ? 300 : 30) * 2; 
                     }
                 } else { p.x += (dx / dist) * p.speed; p.y += (dy / dist) * p.speed; }
             }
@@ -134,7 +150,6 @@ setInterval(() => {
                 else {
                     m.y += m.speed; 
                     if (m.y >= 920) { 
-                        // ★ 멀티 즉사 시스템 적용
                         if (m.isBoss) { room.nexusHp = 0; } else { room.nexusHp -= 1; }
                         room.monsters.splice(i, 1); 
                     }
@@ -143,10 +158,10 @@ setInterval(() => {
 
             if (room.nexusHp <= 0 && !room.isGameOver) {
                 room.nexusHp = 0; room.isGameOver = true;
+                room.stats.wave = room.currentWave;
                 io.to(roomCode).emit('game_over', room.stats);
             }
 
-            // ★ 멀티 정량 웨이브 시스템
             if (!room.isGameOver && room.currentWave <= STAGE_DB[room.stage].maxWave) {
                 let maxWave = STAGE_DB[room.stage].maxWave;
                 
@@ -160,7 +175,9 @@ setInterval(() => {
                         let isFinal = (room.currentWave === maxWave); let isMidBoss = (room.currentWave % 5 === 0);
                         if (isMidBoss || isFinal) {
                             let maxHp = (500 + room.frameCount) * STAGE_DB[room.stage].hpMultiplier; 
-                            room.monsters.push({ id: Math.random().toString(36).substr(2, 9), x: 100 + Math.random() * 520, y: -30, speed: 0.3, hp: maxHp, maxHp: maxHp, isBoss: true, stunTimer: 0 });
+                            // ★ 보스는 무조건 가운데(x: 360) 고정 스폰
+                            room.monsters.push({ id: Math.random().toString(36).substr(2, 9), x: 360, y: -30, speed: 0.3, hp: maxHp, maxHp: maxHp, isBoss: true, stunTimer: 0 });
+                            io.to(roomCode).emit('boss_spawned'); // ★ 클라이언트에 보스 연출 트리거 전송
                         }
                         room.waveState = 'WAITING_CLEAR';
                     }
@@ -171,9 +188,10 @@ setInterval(() => {
                         
                         if (room.currentWave >= maxWave) {
                             room.isGameOver = true;
-                            io.to(roomCode).emit('game_clear', { stage: room.stage });
+                            room.stats.wave = room.currentWave;
+                            io.to(roomCode).emit('game_clear', { stage: room.stage, stats: room.stats });
                         } else {
-                            room.waveState = 'COUNTDOWN'; room.waveTimer = 180; // 3초 대기
+                            room.waveState = 'COUNTDOWN'; room.waveTimer = 180; 
                         }
                     }
                 } else if (room.waveState === 'COUNTDOWN') {
@@ -191,7 +209,7 @@ setInterval(() => {
 io.on('connection', (socket) => {
     socket.on('join_room', (data) => {
         let roomCode = data.roomCode; let profile = data.profile; let reqStage = data.stage || 1; 
-        if (!rooms[roomCode]) { rooms[roomCode] = { players: [], monsters: [], units: [], projectiles: [], frameCount: 0, countdown: 300, currentWave: 1, stage: reqStage, nexusHp: 10, isGameOver: false, waveState: 'SPAWNING', spawned: 0, waveTimer: 0, stats: { kills: 0, wave: 1, goldEarned: 0 } }; } // ★ 초기 넥서스 HP 10
+        if (!rooms[roomCode]) { rooms[roomCode] = { players: [], monsters: [], units: [], projectiles: [], frameCount: 0, countdown: 300, currentWave: 1, stage: reqStage, nexusHp: 10, isGameOver: false, waveState: 'SPAWNING', spawned: 0, waveTimer: 0, stats: { kills: 0, wave: 1, goldEarned: 0 } }; } 
         let room = rooms[roomCode];
         if (room.players.some(p => p.id === socket.id)) return;
         if (room.players.length >= 2) return socket.emit('error_msg', "방이 꽉 찼습니다!");
