@@ -1,18 +1,30 @@
 {
-  "name": "lumberjack-game",
+  "name": "upgrade-defense",
   "version": "1.0.0",
-  "description": "",
-  "main": "data.js",
+  "description": "2인 협동 디펜스 게임",
+  "main": "electron.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "electron .",
+    "build": "electron-builder --win"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
-  }
+  },
+  "devDependencies": {
+    "electron": "^29.4.6",
+    "electron-builder": "^24.13.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kovcrewq41/defense-game.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kovcrewq41/defense-game/issues"
+  },
+  "homepage": "https://github.com/kovcrewq41/defense-game#readme"
 }

@@ -1,0 +1,21 @@
+{
+  "name": "업그레이드 디펜스",
+  "short_name": "디펜스",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "bg_1.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "bg_1.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
