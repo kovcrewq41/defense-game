@@ -1,0 +1,52 @@
+
+
+// ==========================================
+// 🌟 신규 시스템: 스타팅 영웅 선택 로직 🌟
+// ==========================================
+let chosenStartingHero = null;
+
+function createHeroSelectModal() {
+    const modal = document.createElement('div');
+    modal.id = 'heroSelectModal';
+    modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center; font-family:"Malgun Gothic", sans-serif;';
+    
+    let html = `<h2 style="color:#ffdd57; margin-bottom:20px; text-shadow: 2px 2px 4px #000;">✨ 주력 스타팅 영웅 선택 ✨</h2>`;
+    html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; max-width: 600px; padding: 20px;">`;
+    
+    const heroes = [
+        { id: 'SWORD_1', name: '⚔️ 훈련병 (검사)', color: '#eeeeee', desc: '안정적인 밸런스의 근접 딜러' },
+        { id: 'ARCHER_1', name: '🏹 초보 궁수', color: '#a1887f', desc: '긴 사거리로 안전한 원거리 딜러' },
+        { id: 'MAGE_1', name: '🪄 견습 법사', color: '#81d4fa', desc: '강력한 스킬과 군중 제어(CC)' },
+        { id: 'SHIELD_1', name: '🛡️ 훈련 방패', color: '#b0bec5', desc: '적을 기절시키는 단단한 탱커' },
+        { id: 'GUNNER_1', name: '🔫 초보 총잡이', color: '#ffe082', desc: '빠른 공격속도의 지속 딜러' },
+        { id: 'NINJA_1', name: '🥷 초보 도적', color: '#9e9e9e', desc: '독과 크리티컬로 보스를 녹이는 암살자' }
+    ];
+
+    heroes.forEach(h => {
+        html += `<div onclick="startWithHero('${h.id}')" style="background:#222; border:2px solid ${h.color}; padding:15px; border-radius:10px; cursor:pointer; text-align:center; transition:0.2s;" onmouseover="this.style.background='#444'" onmouseout="this.style.background='#222'">
+            <div style="font-size:18px; font-weight:bold; color:${h.color}; margin-bottom:5px;">${h.name}</div>
+            <div style="font-size:12px; color:#aaa;">${h.desc}</div>
+        </div>`;
+    });
+
+    html += `</div>`;
+    html += `<button onclick="document.getElementById('heroSelectModal').style.display='none'" style="margin-top:20px; padding:10px 40px; font-size:16px; background:#d32f2f; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">취소</button>`;
+    
+    modal.innerHTML = html;
+    document.body.appendChild(modal);
+}
+
+// 창이 로드될 때 팝업창 미리 만들어두기
+window.addEventListener('load', createHeroSelectModal);
+
+// 영웅을 클릭하면 실행되는 함수
+window.startWithHero = function(heroId) {
+    chosenStartingHero = heroId; // 선택한 영웅 기억
+    document.getElementById('heroSelectModal').style.display = 'none'; // 창 닫기
+    document.getElementById('lobby').style.display = 'none'; // 로비 닫기
+    document.getElementById('gameContainer').style.display = 'block'; // 게임 화면 열기
+    resizeCanvas();
+    if (audioCtx.state === 'suspended') audioCtx.resume(); 
+    startGame(); // 게임 진짜 시작!
+}
+
