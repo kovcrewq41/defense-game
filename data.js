@@ -12,7 +12,7 @@ const RELIC_DB = {
 };
 
 // ==========================================
-// ⚔️ 아이템 & 조합 시스템 데이터베이스 (도트 그래픽 패치)
+// ⚔️ 아이템 & 조합 시스템 데이터베이스
 // ==========================================
 const ITEM_DB = { 
     // 🟤 1. 기본 아이템 (재료 8종)
@@ -21,37 +21,45 @@ const ITEM_DB = {
     "VEST": { name: "쇠사슬 조끼", type: "armor", value: 20, sheetCol: 2, sheetRow: 0 }, 
     "ROD": { name: "쓸데없이 큰 지팡이", type: "ap", value: 1.1, sheetCol: 3, sheetRow: 0 }, 
     "BELT": { name: "거인의 허리띠", type: "hp", value: 150, sheetCol: 0, sheetRow: 1 }, 
-    "GLOVE": { name: "연습용 장갑", type: "crit", value: 0.05, sheetCol: 1, sheetRow: 1 }, // 병 모양 사용
+    "GLOVE": { name: "연습용 장갑", type: "crit", value: 0.05, sheetCol: 1, sheetRow: 1 }, 
     "CLOAK": { name: "음전자 망토", type: "mr", value: 20, sheetCol: 2, sheetRow: 1 }, 
     "TEAR": { name: "여신의 눈물", type: "mana", value: 1, sheetCol: 3, sheetRow: 1 }, 
 
-    // 🟡 2. 조합 아이템 (완성템)
+    // 🛡️ 신규 탱커 조합 아이템 6종
+    "warmog": { name: "💖 워모그의 심장", desc: "체력 +300 / 초광역 오라 및 보스 기절 시간 극감", stat: { type: "hp", value: 300 }, isCombined: true },
+    "sunfire": { name: "🔥 태양불꽃 갑옷", desc: "체력 +150, 방어력 +30 / 광역 가시 고정 피해", stat: { type: "hp", value: 150 }, secondaryStat: { type: "armor", value: 30 }, isCombined: true },
+    "abyssal": { name: "🔮 심연의 가면", desc: "체력 +150, 마방 +30 / 광역 적 이동 속도 감소", stat: { type: "hp", value: 150 }, secondaryStat: { type: "mr", value: 30 }, isCombined: true },
+    "thornmail": { name: "🌵 가시 덤불 조끼", desc: "방어력 +80 / 근접 적에게 강력한 가시 고정 피해", stat: { type: "armor", value: 80 }, isCombined: true },
+    "gargoyle": { name: "🗿 가고일 돌갑옷", desc: "방어력 +40, 마방 +40 / 가시 피해 및 슬로우 동시 발산", stat: { type: "armor", value: 40 }, secondaryStat: { type: "mr", value: 40 }, isCombined: true },
+    "frozen": { name: "❄️ 절대 영도 망토", desc: "마법 저항력 +80 / 주변 적들의 이동 속도 대폭 폭락", stat: { type: "mr", value: 80 }, isCombined: true },
+
+    // 🟡 2. 기존 조합 아이템 (완성템) - 괄호를 닫지 않고 계속 이어서 적습니다!
     "INFINITY_EDGE": { 
-        name: "무한의 대검", isCombined: true, sheetCol: 2, sheetRow: 2, // 망치 모양 사용
+        name: "무한의 대검", isCombined: true, sheetCol: 2, sheetRow: 2, 
         desc: "공격력 25% & 크리티컬 확률 15% 증가",
         stat: { type: "dmg", value: 1.25, critRateBonus: 0.15 } 
     },
     "GIANT_SLAYER": { 
-        name: "거인 학살자", isCombined: true, sheetCol: 3, sheetRow: 2, // 방패 모양 사용
+        name: "거인 학살자", isCombined: true, sheetCol: 3, sheetRow: 2, 
         desc: "공격력 15% 증가 & 보스 타격 시 데미지 1.5배",
         stat: { type: "dmg", value: 1.15, bossDmgMult: 1.5 } 
     },
     "RABADON": { 
-        name: "라바돈의 모자", isCombined: true, sheetCol: 0, sheetRow: 3, // 금색 지팡이 사용
+        name: "라바돈의 모자", isCombined: true, sheetCol: 0, sheetRow: 3, 
         desc: "주문력 50% 증가 & 마나 회복량 1.5배",
         stat: { type: "ap", value: 1.5, manaGainMult: 1.5 } 
     },
     "DEATH_BLADE": { 
-        name: "죽음의 검", isCombined: true, sheetCol: 1, sheetRow: 3, // 분홍 동전 사용
+        name: "죽음의 검", isCombined: true, sheetCol: 1, sheetRow: 3, 
         desc: "공격력 30% 증가",
         stat: { type: "dmg", value: 1.3, critRateBonus: 0.0 } 
     },
     "RED_BUFF": { 
-        name: "붉은 덩굴정령", isCombined: true, sheetCol: 3, sheetRow: 3, // 빨간 구슬 사용
+        name: "붉은 덩굴정령", isCombined: true, sheetCol: 3, sheetRow: 3, 
         desc: "공속 25% 증가 & 5초간 고정 피해 & 치유 감소",
         stat: { type: "spd", value: 0.75, armorBonus: 20 } 
     }
-};
+}; // 💡 여기서 ITEM_DB 전체를 딱 한 번만 닫아줍니다!
 
 // 💡 3. 아이템 조합 공식
 const ITEM_RECIPES = [

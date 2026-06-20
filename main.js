@@ -171,7 +171,13 @@ function startGame() {
     // 👇 신규 추가: 선택한 주력 영웅을 맵 정중앙에 소환! 👇
     if (chosenStartingHero) {
         let newHero = {
-            ...UNIT_DB[chosenStartingHero], id: Math.random().toString(36).substr(2, 9), type: chosenStartingHero, side: mySide, gridX: 3, gridY: 3, x: START_X + 3 * TILE_SIZE + TILE_SIZE/2, y: START_Y + 3 * TILE_SIZE + TILE_SIZE/2, timer: 0, attackAnimTimer: 0, items: [], hyperTimer: 0, critRate: UNIT_DB[chosenStartingHero].critRate || 0, critDamage: UNIT_DB[chosenStartingHero].critDamage || 1.5, mana: UNIT_DB[chosenStartingHero].mana || 0, maxMana: UNIT_DB[chosenStartingHero].maxMana || 100, manaPerAttack: UNIT_DB[chosenStartingHero].manaPerAttack || 10
+            ...UNIT_DB[chosenStartingHero], id: Math.random().toString(36).substr(2, 9), type: chosenStartingHero, side: mySide, gridX: 3, gridY: 3, x: START_X + 3 * TILE_SIZE + TILE_SIZE/2, y: START_Y + 3 * TILE_SIZE + TILE_SIZE/2, timer: 0, attackAnimTimer: 0, items: [], hyperTimer: 0, critRate: UNIT_DB[chosenStartingHero].critRate || 0, critDamage: UNIT_DB[chosenStartingHero].critDamage || 1.5, mana: UNIT_DB[chosenStartingHero].mana || 0, maxMana: UNIT_DB[chosenStartingHero].maxMana || 100, manaPerAttack: UNIT_DB[chosenStartingHero].manaPerAttack || 10,
+            
+            // 👑 주인공 전용 특수 스탯 부여!
+            isHero: true,    // 내가 바로 주인공이다
+            exp: 0,          // 현재 경험치
+            maxExp: 10,      // 다음 진화를 위한 목표 경험치
+            heroStack: 0     // 만렙 이후 쌓이는 한계돌파 스택!
         };
         units.push(newHero);
         chosenStartingHero = null;
@@ -257,9 +263,35 @@ function handleKill(m) {
     if (m.isDead) return; m.isDead = true; stats.kills++;
     let baseGold = m.isBoss ? 50 : 3; let bonusMult = RELIC_ENGINE.getGoldBonus(PlayerProfile.relics); myGold += baseGold * (1 + bonusMult);
     if (m.isBoss && myInventory.length < 5) { 
-        // 💡 신규 로직: 'isCombined'가 없는(완성템이 아닌) 순수 재료 템만 골라내서 드랍!
         let baseItemKeys = Object.keys(ITEM_DB).filter(key => !ITEM_DB[key].isCombined); 
         myInventory.push(baseItemKeys[Math.floor(Math.random() * baseItemKeys.length)]); 
+    }
+
+    // 👑 주인공 영웅 경험치 획득 및 진화 로직!
+    let hero = units.find(u => u.isHero);
+    if (hero) {
+        hero.exp += (m.isBoss ? 5 : 1); // 보스는 5, 일반몹은 1 경험치
+        
+        // 경험치가 꽉 찼다면?!
+        if (hero.exp >= hero.maxExp) {
+            let uDef = UNIT_DB[hero.type];
+            if (uDef && uDef.next) {
+                // 1. 다음 티어가 있다면 확정 진화! (분기점이 있다면 첫번째 직업으로)
+                let nextId = Array.isArray(uDef.next) ? uDef.next[0] : uDef.next;
+                hero.type = nextId;
+                hero.exp = 0;
+                hero.maxExp = Math.floor(hero.maxExp * 1.5) + 5; // 다음 렙업은 조금 더 힘들게!
+                spawnVFX('hit', hero.x, hero.y, {color: "#ffea00", radius: 100});
+                addFloatingText("🌟주인공 진화!🌟", hero.x, hero.y - 40, "#ffeb3b");
+            } else {
+                // 2. 만렙(히든/전설)이라면 한계 돌파(스택 쌓기)!
+                hero.exp = 0;
+                hero.maxExp += 10;
+                hero.heroStack++;
+                spawnVFX('hit', hero.x, hero.y, {color: "#ea80fc", radius: 100});
+                addFloatingText(`💥한계돌파 ${hero.heroStack}단계!💥`, hero.x, hero.y - 40, "#ea80fc");
+            }
+        }
     }
 }
 
@@ -385,9 +417,16 @@ function updatePhysics() {
 
                 let statMods = RELIC_ENGINE.getStatMods(PlayerProfile.relics); let relicDmgMult = statMods.dmgMult; buffedCooldown = Math.floor(buffedCooldown * statMods.spdFactor); if (buffedCooldown < 10) buffedCooldown = 10; buffedRange += statMods.rangeBonus; 
 
-                const passiveMultiplier = 1 + ((PlayerProfile.passives?.attackBoostLvl || 0) * 0.05); const classMasteryLvl = PlayerProfile.mastery?.[uStats.trait] || 0; const masteryMultiplier = 1 + (classMasteryLvl * 0.1);
+                // 👑 1. 패시브 및 주인공 스택 배율 적용 (스택당 1% 증가 굿!)
+                let passiveMultiplier = 1 + ((PlayerProfile.passives?.attackBoostLvl || 0) * 0.05);
+                if (u.isHero) passiveMultiplier += (u.heroStack * 0.01); 
+
+                // 🚨 2. 지워졌던 최종 데미지(finalDamage) 계산식 복구! (매우 중요)
+                const classMasteryLvl = PlayerProfile.mastery?.[uStats.trait] || 0; 
+                const masteryMultiplier = 1 + (classMasteryLvl * 0.1);
                 const finalDamage = Math.floor(buffedDamage * passiveMultiplier * masteryMultiplier * relicDmgMult);
 
+                // 🎯 3. 타겟팅 및 스킬 로직 시작
                 let target = null; let validMonsters = []; let rangeSq = buffedRange * buffedRange;
                 monsters.forEach(m => { let dx = m.x - u.x; let dy = m.y - u.y; let distSq = dx*dx + dy*dy; if (distSq <= rangeSq) validMonsters.push({ m, distSq }); });
                 if (validMonsters.length > 0) { if (uStats.trait === "ARCHER" || uStats.trait === "GUNNER") validMonsters.sort((a, b) => b.m.hp - a.m.hp); else if (uStats.trait === "NINJA") validMonsters.sort((a, b) => b.m.pathIndex - a.m.pathIndex); else validMonsters.sort((a, b) => a.distSq - b.distSq); target = validMonsters[0].m; }
@@ -686,6 +725,18 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 
+function combineDefensiveItems(item1, item2) {
+    let combination = [item1, item2].sort().join("+");
+    switch(combination) {
+        case "BELT+BELT":   return "warmog";    // 워모그
+        case "BELT+VEST":   return "sunfire";   // 태불갑
+        case "BELT+CLOAK":  return "abyssal";   // 심연의가면
+        case "VEST+VEST":   return "thornmail"; // 가시조끼
+        case "CLOAK+VEST":  return "gargoyle";  // 가고일
+        case "CLOAK+CLOAK": return "frozen";    // 절대영도
+        default:            return null;        
+    }
+}
 
 canvas.addEventListener('mouseup', (e) => {
     const pos = getPointerPos(e);
@@ -701,24 +752,31 @@ canvas.addEventListener('mouseup', (e) => {
             let droppedItemId = myInventory[draggingItem.index];
             let isCombined = false;
 
-            // 💡 1. 롤토체스식 아이템 조합 검사!
+            // 💡 1. 아이템 조합 검사! (기존 조합 & 신규 탱커 조합 모두 확인)
             for (let i = 0; i < targetUnit.items.length; i++) {
                 let existingItemId = targetUnit.items[i];
+                let resultItemId = null;
                 
-                // data.js에 있는 레시피 중에 방금 올린 템 + 기존 템 조합이 있는지 확인
+                // 1-1. 기존 레시피 검사
                 let recipe = ITEM_RECIPES.find(r => 
                     (r.mat1 === droppedItemId && r.mat2 === existingItemId) || 
                     (r.mat1 === existingItemId && r.mat2 === droppedItemId)
                 );
+                if (recipe) resultItemId = recipe.result;
 
-                if (recipe) {
+                // 1-2. 신규 탱커 레시피 검사 (기존 레시피에 없으면)
+                if (!resultItemId) {
+                    resultItemId = combineDefensiveItems(droppedItemId, existingItemId);
+                }
+
+                if (resultItemId) {
                     Sound.click();
                     // 기존 재료 템 삭제
                     targetUnit.items.splice(i, 1); 
                     // 인벤토리에서 드래그한 재료 삭제
                     myInventory.splice(draggingItem.index, 1); 
                     // ✨ 완성된 상위 아이템으로 교체 장착!
-                    targetUnit.items.push(recipe.result); 
+                    targetUnit.items.push(resultItemId); 
 
                     // 조합 성공 뽕맛 이펙트!
                     spawnVFX('hit', targetUnit.x, targetUnit.y, {color: '#ffea00', radius: 80});
@@ -751,6 +809,7 @@ canvas.addEventListener('mouseup', (e) => {
         draggingUnit = null;
     }
 });
+
 
 canvas.addEventListener('touchstart', (e) => { e.preventDefault(); if (e.touches.length > 0) canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY })); }, { passive: false });
 canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (e.touches.length > 0) canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY })); }, { passive: false });
